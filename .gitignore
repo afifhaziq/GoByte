@@ -1,0 +1,52 @@
+# Project Documentation
+AGENTS.md
+/.cursor/
+# Input Data
+/dataset/
+*.pcap
+*.pcapng
+
+# Output Files
+*.csv
+*.parquet
+output.*
+
+# Go Build Artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+gobyte-processor
+main
+
+# Go Test Files
+*.test
+*.out
+coverage.out
+*.prof
+
+# Go Dependency Directories
+vendor/
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary Files
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Log Files
+*.log
+
+# OS Generated Files
+Thumbs.db
+.AppleDouble
+.LSOverride
