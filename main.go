@@ -1,9 +1,5 @@
 // GoByte - PCAP parser for preprocessing network traffic data for deep learning models
 
-// TODO: Iterate through list of files
-// TODO: Insert class labels at the end (FB, Youtube) from config file
-// TODO: Terminal support / progress indicator
-
 package main
 
 import (
@@ -11,167 +7,95 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
-	"sort"
-	"sync"
 	"time"
-
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/pcap"
 )
 
 const banner = `
-⡿⣡⣿⣿⡟⡼⡁⠁⣰⠂⡾⠉⢨⣿⠃⣿⡿⠍⣾⣟⢤⣿⢇⣿⢇⣿⣿⢿
-⣱⣿⣿⡟⡐⣰⣧⡷⣿⣴⣧⣤⣼⣯⢸⡿⠁⣰⠟⢀⣼⠏⣲⠏⢸⣿⡟⣿
-⣿⣿⡟⠁⠄⠟⣁⠄⢡⣿⣿⣿⣿⣿⣿⣦⣼⢟⢀⡼⠃⡹⠃⡀⢸⡿⢸⣿
-⣿⣿⠃⠄⢀⣾⠋⠓⢰⣿⣿⣿⣿⣿⣿⠿⣿⣿⣾⣅⢔⣕⡇⡇⡼⢁⣿⣿
-⣿⡟⠄⠄⣾⣇⠷⣢⣿⣿⣿⣿⣿⣿⣿⣭⣀⡈⠙⢿⣿⣿⡇⡧⢁⣾⣿⣿
-⣿⡇⠄⣼⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⢻⠇⠄⠄⢿⣿⡇⢡⣾⣿⣿⣿
-⣿⣷⢰⣿⣿⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⢰⣧⣀⡄⢀⠘⡿⣰⣿⣿⣿⣿⣿
-⢹⣿⢸⣿⣿⠟⠻⢿⣿⣿⣿⣿⣿⣿⣿⣶⣭⣉⣤⣿⢈⣼⣿⣿⣿⣿⣿⣿
-⢸⠇⡜⣿⡟⠄⠄⠄⠈⠙⣿⣿⣿⣿⣿⣿⣿⣿⠟⣱⣻⣿⣿⣿⣿⣿⠟⠁
-⠄⣰⡗⠹⣿⣄⠄⠄⠄⢀⣿⣿⣿⣿⣿⣿⠟⣅⣥⣿⣿⣿⣿⠿⠋⠄⠄⣾
-⠜⠋⢠⣷⢻⣿⣿⣶⣾⣿⣿⣿⣿⠿⣛⣥⣾⣿⠿⠟⠛⠉⠄⠄
+  ________      __________          __          
+ /  _____/  ____\______   \___.__._/  |_  ____  
+/   \  ___ /  _ \|    |  _<   |  |\   __\/ __ \ 
+\    \_\  (  <_> )    |   \\___  | |  | \  ___/ 
+ \______  /\____/|______  // ____| |__|  \___  >
+        \/              \/ \/                \/ 
 
 Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
 `
 
-// const banner = `
-//   ________      __________          __
-//  /  _____/  ____\______   \___.__._/  |_  ____
-// /   \  ___ /  _ \|    |  _<   |  |\   __\/ __ \
-// \    \_\  (  <_> )    |   \\___  | |  | \  ___/
-//  \______  /\____/|______  // ____| |__|  \___  >
-//         \/              \/ \/                \/
-
-// Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
-// `
-
 func main() {
 	// --- CLI FLAGS ---
-	inputFile := flag.String("input", "dataset/test.pcap", "Input PCAP file path")
+	inputFile := flag.String("input", "", "Input PCAP file path (single file mode)")
+	datasetDir := flag.String("dataset", "", "Dataset directory with class subdirectories (multi-file mode)")
 	outputFormat := flag.String("format", "csv", "Output format: csv or parquet")
 	outputFile := flag.String("output", "", "Output file path (default: output.csv or output.parquet)")
-	outputLength := flag.Int("length", 1480, "Desired length of output bytes (pad/truncate)")
-	numWorkers := flag.Int("numworkers", runtime.NumCPU(), "Numbers of CPU cores to use. (default: Use all cores available in the host machine)")
+	outputLength := flag.Int("length", 0, "Desired length of output bytes (pad/truncate). 0 = keep original size (default: 0)")
 	sortPackets := flag.Bool("sort", true, "Retain packets order. set to false to shuffle (default: true)")
+	maxConcurrentFiles := flag.Int("concurrent", 2, "Max concurrent files to process (multi-file mode)")
 
-	// Custom usage function to show banner
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s\n", banner)
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		fmt.Fprintf(os.Stderr, "  %s --input data.pcap --format parquet\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s --input data.pcap --output results.csv --length 64\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  Single file mode:\n")
+		fmt.Fprintf(os.Stderr, "    %s --input data.pcap --format parquet\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "    %s --input data.pcap --output results.csv --length 2048\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\n  Multi-file mode (with class labels):\n")
+		fmt.Fprintf(os.Stderr, "    %s --dataset ./dataset --format parquet --concurrent 2\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "    Dataset structure: dataset/class_a/*.pcap, dataset/class_b/*.pcap\n")
 		fmt.Fprintf(os.Stderr, "\nFormats:\n")
 		fmt.Fprintf(os.Stderr, "  csv     - Standard CSV format (large files)\n")
-		fmt.Fprintf(os.Stderr, "  parquet - Compressed columnar format (recommended for ML/DL)\n")
+		fmt.Fprintf(os.Stderr, "  parquet - Compressed columnar format (recommended for ML)\n")
 	}
 
 	flag.Parse()
 
-	// Print banner on startup
 	fmt.Print(banner)
+
+	// Create output directory if it doesn't exist
+	outputDir := "output"
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		log.Fatalf("Failed to create output directory: %v", err)
+	}
 
 	// Set default output file based on format
 	if *outputFile == "" {
 		if *outputFormat == "parquet" {
-			*outputFile = "output.parquet"
+			*outputFile = filepath.Join(outputDir, "output.parquet")
 		} else {
-			*outputFile = "output.csv"
+			*outputFile = filepath.Join(outputDir, "output.csv")
 		}
+	} else {
+		// If user specified output file, place it in output directory
+		*outputFile = filepath.Join(outputDir, filepath.Base(*outputFile))
 	}
 
-	// 1. Open File
-	handle, err := pcap.OpenOffline(*inputFile)
-	if err != nil {
-		log.Fatalf("cannot open pcap file %s: %v", *inputFile, err)
+	// Validate input mode
+	if *inputFile == "" && *datasetDir == "" {
+		log.Fatal("Error: Must specify either --input (single file) or --dataset (multi-file)")
 	}
-	defer handle.Close()
-
-	fmt.Printf("Processing PCAP file: %s\n", *inputFile)
-	fmt.Printf("Output format: %s\n", *outputFormat)
-	fmt.Printf("Output file: %s\n", *outputFile)
-	fmt.Printf("Packet length: %d bytes\n", *outputLength)
-	fmt.Printf("Workers: %d\n\n", runtime.NumCPU())
+	if *inputFile != "" && *datasetDir != "" {
+		log.Fatal("Error: Cannot use both --input and --dataset. Choose one mode.")
+	}
 
 	t0 := time.Now()
+	var finalPackets []PacketResult
 
-	var size uint16 = 2048
-	// 2. Setup Channels
-	// Jobs channel: Buffering helps keep the reader from blocking
-	jobs := make(chan PacketJob, size)
-	// Results channel
-	results := make(chan PacketResult, size)
-
-	//fmt.Printf("channel size: %d\n\n", size)
-
-	// 3. Start Workers
-	// Usually set to the number of CPU cores
-	//numWorkers := runtime.NumCPU()
-	var wg sync.WaitGroup
-
-	for w := 0; w < *numWorkers; w++ {
-		wg.Add(1)
-		go worker(jobs, results, &wg)
-	}
-
-	// 4. Start a "Collector" in a separate goroutine
-	// Pre-allocate slice with estimated capacity to reduce allocations
-	// This ensures we don't block writing results while reading file
-	finalPackets := make([]PacketResult, 0, 100000)
-	done := make(chan bool)
-	go func() {
-		for res := range results {
-			finalPackets = append(finalPackets, res)
-		}
-		done <- true
-	}()
-
-	// 5. Read File and Feed Workers
-	packetSource := gopacket.NewPacketSource(handle, handle.LinkType())
-
-	// We disable lazy decoding here so the main thread does the read,
-	// but the heavy layer parsing happens in the worker.
-	packetSource.DecodeOptions = gopacket.DecodeOptions{Lazy: true, NoCopy: true}
-
-	counter := 0
-	for packet := range packetSource.Packets() {
-		jobs <- PacketJob{
-			Index:  counter,
-			Packet: packet,
-		}
-		counter++
-	}
-
-	// 6. Shutdown
-	close(jobs)    // Signal workers no more jobs coming
-	wg.Wait()      // Wait for workers to finish processing
-	close(results) // Signal collector no more results coming
-	<-done         // Wait for collector to finish
-
-	// 7. (Optional) Restore Order
-	// Parallel processing scrambles order. If you need
-	// the list 1, 2, 3... sort it now.
-
-	if *sortPackets {
-		sort.Slice(finalPackets, func(i, j int) bool {
-			return finalPackets[i].Index < finalPackets[j].Index
-		})
+	// Mode selection
+	if *datasetDir != "" {
+		// Multi-file mode with class labels
+		finalPackets = processDataset(*datasetDir, *outputLength, *sortPackets, *maxConcurrentFiles)
+	} else {
+		// Single file mode (backward compatible)
+		finalPackets = processSingleFile(*inputFile, *outputLength, *sortPackets)
 	}
 
 	tProcess := time.Since(t0)
-	fmt.Printf("Processed %d packets in %v\n", len(finalPackets), tProcess)
+	fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
 
-	// 8. Truncate/pad all packets to desired length
-	for i := range finalPackets {
-		finalPackets[i].OriginalSize = len(finalPackets[i].Data)
-		finalPackets[i].Data = truncatePad(finalPackets[i].Data, *outputLength)
-	}
-
-	// 9. Export to chosen format
+	// Export to chosen format
 	tWrite := time.Now()
 	if *outputFormat == "parquet" {
 		if err := writeParquet(*outputFile, finalPackets); err != nil {
@@ -188,9 +112,92 @@ func main() {
 	printSummary(len(finalPackets), *outputFile, *outputLength, tProcess, tWriteDuration, time.Since(t0))
 }
 
+// processSingleFile processes a single PCAP file (backward compatible mode)
+func processSingleFile(filePath string, outputLength int, sortPackets bool) []PacketResult {
+	fmt.Printf("Mode: Single file\n")
+	fmt.Printf("Processing: %s\n\n", filePath)
+
+	fileJob := FileJob{
+		FilePath: filePath,
+		Class:    "",
+	}
+
+	packets, err := processFile(fileJob, outputLength, sortPackets, runtime.NumCPU())
+	if err != nil {
+		log.Fatalf("Failed to process file: %v", err)
+	}
+
+	return packets
+}
+
+// processDataset processes multiple PCAP files organized by class directories
+func processDataset(datasetDir string, outputLength int, sortPackets bool, maxConcurrentFiles int) []PacketResult {
+	fmt.Printf("Mode: Multi-file dataset\n")
+	fmt.Printf("Dataset directory: %s\n", datasetDir)
+	fmt.Printf("Max concurrent files: %d\n\n", maxConcurrentFiles)
+
+	// Discover all class directories
+	entries, err := os.ReadDir(datasetDir)
+	if err != nil {
+		log.Fatalf("Failed to read dataset directory: %v", err)
+	}
+
+	var fileJobs []FileJob
+
+	// Scan each class directory
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		className := entry.Name()
+		classPath := filepath.Join(datasetDir, className)
+
+		// Find all PCAP/PCAPNG files in this class
+		pcapFiles, err := filepath.Glob(filepath.Join(classPath, "*.pcap"))
+		if err != nil {
+			log.Printf("Warning: Error scanning %s: %v", classPath, err)
+			continue
+		}
+
+		pcapngFiles, err := filepath.Glob(filepath.Join(classPath, "*.pcapng"))
+		if err != nil {
+			log.Printf("Warning: Error scanning %s: %v", classPath, err)
+			continue
+		}
+
+		allFiles := append(pcapFiles, pcapngFiles...)
+
+		fmt.Printf("Found class '%s': %d files\n", className, len(allFiles))
+
+		for _, file := range allFiles {
+			fileJobs = append(fileJobs, FileJob{
+				FilePath: file,
+				Class:    className,
+			})
+		}
+	}
+
+	if len(fileJobs) == 0 {
+		log.Fatal("No PCAP/PCAPNG files found in dataset directory")
+	}
+
+	fmt.Printf("\nTotal files to process: %d\n", len(fileJobs))
+
+	// Process files with hybrid parallelism
+	return processFilesParallel(fileJobs, outputLength, sortPackets, maxConcurrentFiles)
+}
+
 // printSummary displays a formatted summary of the processing results
 func printSummary(numPackets int, outputFile string, outputLength int, processTime, writeTime, totalTime time.Duration) {
-	fmt.Printf("\nExported %d packets to %s (Length: %d bytes)\n", numPackets, outputFile, outputLength)
+	fmt.Println()
+
+	if outputLength == 0 {
+		fmt.Printf("Exported %d packets to %s (Variable length - original sizes kept)\n", numPackets, outputFile)
+	} else {
+		fmt.Printf("Exported %d packets to %s (Length: %d bytes)\n", numPackets, outputFile, outputLength)
+	}
+
 	fmt.Printf(" - Processing time: %v\n", processTime)
 	fmt.Printf(" - Export time:     %v\n", writeTime)
 	fmt.Printf(" - Total time:      %v\n", totalTime)

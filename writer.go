@@ -28,29 +28,59 @@ func writeCSVOptimized(filename string, packets []PacketResult, outputLength int
 	writer := csv.NewWriter(bufWriter)
 	defer writer.Flush()
 
-	// Write header - pre-allocate full size
-	header := make([]string, 2+outputLength)
-	header[0] = "Index"
-	header[1] = "OriginalSize"
-	for i := 0; i < outputLength; i++ {
-		header[2+i] = fmt.Sprintf("Byte_%d", i)
+	// Determine if we have class labels (check first packet)
+	hasClassLabels := len(packets) > 0 && packets[0].Class != ""
+
+	// Determine max packet size for variable-length packets (outputLength == 0)
+	maxPacketSize := outputLength
+	if outputLength == 0 && len(packets) > 0 {
+		// Find the maximum packet size
+		for _, p := range packets {
+			if len(p.Data) > maxPacketSize {
+				maxPacketSize = len(p.Data)
+			}
+		}
+	}
+
+	// Write header - Format: Byte_0, Byte_1, ..., Byte_N, Class (if present)
+	headerSize := maxPacketSize
+	if hasClassLabels {
+		headerSize += 1 // Add Class column at the end
+	}
+
+	header := make([]string, headerSize)
+
+	// Byte columns first
+	for i := 0; i < maxPacketSize; i++ {
+		header[i] = fmt.Sprintf("Byte_%d", i)
+	}
+
+	// Class column last (if present)
+	if hasClassLabels {
+		header[maxPacketSize] = "Class"
 	}
 
 	if err := writer.Write(header); err != nil {
 		return fmt.Errorf("error writing header: %w", err)
 	}
 
-	// Pre-allocate row buffer to reuse for all packets
-	row := make([]string, 2+outputLength)
-
 	// Write data rows
 	for _, p := range packets {
-		row[0] = strconv.Itoa(p.Index)
-		row[1] = strconv.Itoa(p.OriginalSize)
+		// Prepare row based on actual packet size
+		currentRowSize := len(p.Data)
+		if hasClassLabels {
+			currentRowSize += 1
+		}
+		row := make([]string, currentRowSize)
 
-		// Convert bytes to strings efficiently
+		// Byte columns first
 		for i, b := range p.Data {
-			row[2+i] = strconv.Itoa(int(b))
+			row[i] = strconv.Itoa(int(b))
+		}
+
+		// Class column last (if present)
+		if hasClassLabels {
+			row[len(p.Data)] = p.Class
 		}
 
 		if err := writer.Write(row); err != nil {
@@ -62,11 +92,6 @@ func writeCSVOptimized(filename string, packets []PacketResult, outputLength int
 }
 
 // writeParquet writes packets to Parquet format.
-// Parquet is a columnar storage format that is:
-// - 10-100x smaller than CSV (compressed)
-// - Much faster to read for ML training (columnar layout)
-// - Native support in pandas, PyTorch, TensorFlow
-// - Better for large datasets
 func writeParquet(filename string, packets []PacketResult) error {
 	file, err := os.Create(filename)
 	if err != nil {
