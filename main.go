@@ -98,7 +98,7 @@ func main() {
 	// Export to chosen format
 	tWrite := time.Now()
 	if *outputFormat == "parquet" {
-		if err := writeParquet(*outputFile, finalPackets); err != nil {
+		if err := writeParquet(*outputFile, finalPackets, *outputLength); err != nil {
 			log.Fatalf("failed to write parquet: %v", err)
 		}
 	} else {

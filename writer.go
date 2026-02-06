@@ -5,15 +5,14 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"reflect"
 	"strconv"
 
 	"github.com/parquet-go/parquet-go"
 )
 
 // writeCSVOptimized writes packets to CSV with optimizations:
-// - Pre-allocates row slices to avoid repeated allocations
-// - Uses buffered writer for fewer syscalls (1MB buffer)
-// - Reuses row buffer for all packets to reduce allocations
+
 func writeCSVOptimized(filename string, packets []PacketResult, outputLength int) error {
 	file, err := os.Create(filename)
 	if err != nil {
@@ -91,23 +90,91 @@ func writeCSVOptimized(filename string, packets []PacketResult, outputLength int
 	return nil
 }
 
-// writeParquet writes packets to Parquet format.
-func writeParquet(filename string, packets []PacketResult) error {
+// writeParquet writes packets to Parquet format with the same schema as CSV.
+func writeParquet(filename string, packets []PacketResult, outputLength int) error {
+	if len(packets) == 0 {
+		return fmt.Errorf("no packets to write")
+	}
+
+	// Determine if we have class labels (check first packet)
+	hasClassLabels := len(packets) > 0 && packets[0].Class != ""
+
+	// Determine max packet size for variable-length packets
+	maxPacketSize := outputLength
+	if outputLength == 0 {
+		for _, p := range packets {
+			if len(p.Data) > maxPacketSize {
+				maxPacketSize = len(p.Data)
+			}
+		}
+	}
+
+	// Build dynamic struct type with byte columns and optional class column
+	fields := make([]reflect.StructField, 0, maxPacketSize+1)
+
+	// Add byte columns
+	for i := 0; i < maxPacketSize; i++ {
+		fields = append(fields, reflect.StructField{
+			Name: fmt.Sprintf("Byte_%d", i),
+			Type: reflect.TypeOf(int32(0)),
+			Tag:  reflect.StructTag(fmt.Sprintf(`parquet:"Byte_%d"`, i)),
+		})
+	}
+
+	// Add class column if present
+	if hasClassLabels {
+		fields = append(fields, reflect.StructField{
+			Name: "Class",
+			Type: reflect.TypeOf(""),
+			Tag:  `parquet:"Class"`,
+		})
+	}
+
+	// Create the dynamic struct type
+	structType := reflect.StructOf(fields)
+
+	// Convert packets to dynamic structs
+	rowValues := make([]interface{}, len(packets))
+	for idx, p := range packets {
+		rowPtr := reflect.New(structType)
+		row := rowPtr.Elem()
+
+		// Set byte values
+		for i := 0; i < maxPacketSize; i++ {
+			if i < len(p.Data) {
+				row.Field(i).SetInt(int64(p.Data[i]))
+			} else {
+				row.Field(i).SetInt(0) // Pad with zeros
+			}
+		}
+
+		// Set class value if present
+		if hasClassLabels {
+			row.Field(maxPacketSize).SetString(p.Class)
+		}
+
+		rowValues[idx] = rowPtr.Interface()
+	}
+
+	// Create output file
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
 	}
 	defer file.Close()
 
-	// Create parquet writer with Zstandard compression
-	writer := parquet.NewGenericWriter[PacketResult](file,
-		parquet.Compression(&parquet.Zstd),
-	)
+	// Get schema from dynamic struct
+	schema := parquet.SchemaOf(rowValues[0])
+
+	// Create writer using reflection to handle dynamic type
+	writer := parquet.NewWriter(file, schema, parquet.Compression(&parquet.Zstd))
 	defer writer.Close()
 
-	// Write all packets at once
-	if _, err := writer.Write(packets); err != nil {
-		return fmt.Errorf("error writing parquet: %w", err)
+	// Write rows using reflection
+	for _, rowPtr := range rowValues {
+		if err := writer.Write(rowPtr); err != nil {
+			return fmt.Errorf("error writing row: %w", err)
+		}
 	}
 
 	return nil

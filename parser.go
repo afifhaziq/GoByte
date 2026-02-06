@@ -186,7 +186,7 @@ func processFilesParallel(fileJobs []FileJob, outputLength int, sortPackets bool
 					continue
 				}
 
-				fmt.Printf("[Worker %d] ✓ Processed %s: %d packets\n", workerID, filepath.Base(fileJob.FilePath), len(packets))
+				fmt.Printf("[Worker %d] Processed %s: %d packets\n", workerID, filepath.Base(fileJob.FilePath), len(packets))
 
 				// Add results to global list (thread-safe)
 				resultsMutex.Lock()
