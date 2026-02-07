@@ -2,10 +2,12 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/afifhaziq/GoByte/release.yml?branch=main)](https://github.com/afifhaziq/GoByte/actions)
-[![Go Report Card](https://goreportcard.com/badge/github.com/afifhaziq/GoByte)](https://goreportcard.com/report/github.com/afifhaziq/GoByte)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/afifhaziq/GoByte/release.yml?branch=main&label=build)](https://github.com/afifhaziq/GoByte/actions/workflows/release.yml)
+[![Security Scan](https://img.shields.io/github/actions/workflow/status/afifhaziq/GoByte/security.yml?branch=main&label=security)](https://github.com/afifhaziq/GoByte/actions/workflows/security.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/afifhaziq/GoByte?style=flat)](https://github.com/afifhaziq/GoByte/releases/latest)
 
-**GoByte** is a blazingly fast PCAP/PCAPNG parser built in Go for preprocessing network traffic data for deep learning models. It extracts packet bytes (excluding Ethernet headers) and exports them in tabular formats (CSV or Parquet).
+
+**GoByte** is a fast PCAP/PCAPNG parser built in Go for preprocessing network traffic data for deep learning models. It extracts packet bytes and exports them in tabular formats (CSV or Parquet).
 
 ```
   ________      __________          __          
@@ -26,6 +28,7 @@ Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
 - **Class Labels**: Automatic labeling from directory structure (e.g., `dataset/malware/*.pcap`)
 - **Batch Processing**: Process multiple PCAP files in parallel
 - **Flexible Output**: Fixed-length padding/truncation or variable-length packets
+- **Privacy Protection**: Optional IP address masking for anonymization
 - **Deep Learning Ready**: Direct output for PyTorch, TensorFlow, scikit-learn
 - **PCAP/PCAPNG Support**: Handles both formats automatically
 
@@ -175,6 +178,12 @@ Process and pad/truncate packets to 1480 bytes:
 gobyte --input traffic.pcap --length 1480 --format parquet
 ```
 
+Mask IP addresses for privacy:
+
+```bash
+gobyte --input traffic.pcap --ipmask --format parquet
+```
+
 ### Multi-File Processing with Class Labels
 
 Organize your dataset like this:
@@ -232,6 +241,8 @@ Options:
         Use streaming mode for memory efficiency (default: false)
   --per-file
         Create separate output file for each input file (dataset mode only)
+  --ipmask
+        Mask source and destination IP addresses
 
 Memory Optimization:
   --streaming      Stream packets to disk (low memory, ~200-300MB RAM)
@@ -277,6 +288,18 @@ gobyte --dataset my_dataset --format parquet --per-file
 ```bash
 gobyte --input data.pcap --length 0 --format csv
 # Keeps original packet sizes (no padding/truncation)
+```
+
+#### Example 7: IP Address Masking for Privacy
+```bash
+gobyte --input data.pcap --ipmask --format parquet
+# Masks source and destination IP addresses (sets them to 0.0.0.0)
+```
+
+#### Example 8: Combined Options
+```bash
+gobyte --dataset my_dataset --length 1500 --ipmask --streaming --format parquet
+# Fixed-length packets with IP masking in memory-efficient streaming mode
 ```
 
 ---

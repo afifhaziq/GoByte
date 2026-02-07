@@ -92,26 +92,34 @@ func (w *CSVStreamWriter) WritePacket(p PacketResult) error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 
-	// Pad packet if needed
+	// Packets are already standardized by parser - no length modification needed
 	data := p.Data
-	if len(data) < w.maxPacketSize {
-		padded := make([]byte, w.maxPacketSize)
-		copy(padded, data)
-		data = padded
-	} else if len(data) > w.maxPacketSize {
-		data = data[:w.maxPacketSize]
-	}
 
-	// Reuse row buffer instead of allocating new one
-	for i, b := range data {
-		w.rowBuffer[i] = strconv.Itoa(int(b))
-	}
-
+	// Determine actual row size based on data length
+	rowSize := len(data)
 	if w.hasClass {
-		w.rowBuffer[w.maxPacketSize] = p.Class
+		rowSize++
 	}
 
-	if err := w.csvWriter.Write(w.rowBuffer); err != nil {
+	// Use pre-allocated buffer if size matches, otherwise create new one
+	var row []string
+	if rowSize == len(w.rowBuffer) {
+		row = w.rowBuffer
+	} else {
+		row = make([]string, rowSize)
+	}
+
+	// Convert bytes to strings
+	for i, b := range data {
+		row[i] = strconv.Itoa(int(b))
+	}
+
+	// Add class label if present
+	if w.hasClass {
+		row[len(data)] = p.Class
+	}
+
+	if err := w.csvWriter.Write(row); err != nil {
 		return err
 	}
 
@@ -191,7 +199,8 @@ func (w *ParquetStreamWriter) WritePacket(p PacketResult) error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
 
-	// Simple struct write (no reflection!)
+	// Packets are already standardized by parser - write as-is
+	// No length modification needed here
 	packet := ParquetPacket{
 		Data:  p.Data,
 		Class: p.Class,
@@ -232,9 +241,14 @@ func (w *ParquetStreamWriter) Close() error {
 	return w.file.Close()
 }
 
-// writeCSVOptimized writes packets to CSV with optimizations:
-
+// writeCSVOptimized writes packets to CSV with optimizations.
+// Packets are expected to be already standardized by the parser.
+// For variable-length packets (outputLength==0), all packets are padded to max size for consistent columns.
 func writeCSVOptimized(filename string, packets []PacketResult, outputLength int) error {
+	if len(packets) == 0 {
+		return fmt.Errorf("no packets to write")
+	}
+
 	file, err := os.Create(filename)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %w", err)
@@ -248,36 +262,29 @@ func writeCSVOptimized(filename string, packets []PacketResult, outputLength int
 	writer := csv.NewWriter(bufWriter)
 	defer writer.Flush()
 
-	// Determine if we have class labels (check first packet)
-	hasClassLabels := len(packets) > 0 && packets[0].Class != ""
+	// Determine if we have class labels
+	hasClassLabels := packets[0].Class != ""
 
-	// Determine max packet size for variable-length packets (outputLength == 0)
-	maxPacketSize := outputLength
-	if outputLength == 0 && len(packets) > 0 {
-		// Find the maximum packet size
-		for _, p := range packets {
-			if len(p.Data) > maxPacketSize {
-				maxPacketSize = len(p.Data)
-			}
-		}
+	// For variable-length packets (outputLength==0), pad all to max size for consistent CSV columns
+	if outputLength == 0 {
+		packets = padToMaxSize(packets)
 	}
 
+	// Determine packet size (all packets should now be same size)
+	packetSize := len(packets[0].Data)
+
 	// Write header - Format: Byte_0, Byte_1, ..., Byte_N, Class (if present)
-	headerSize := maxPacketSize
+	headerSize := packetSize
 	if hasClassLabels {
-		headerSize += 1 // Add Class column at the end
+		headerSize++
 	}
 
 	header := make([]string, headerSize)
-
-	// Byte columns first
-	for i := 0; i < maxPacketSize; i++ {
+	for i := 0; i < packetSize; i++ {
 		header[i] = fmt.Sprintf("Byte_%d", i)
 	}
-
-	// Class column last (if present)
 	if hasClassLabels {
-		header[maxPacketSize] = "Class"
+		header[packetSize] = "Class"
 	}
 
 	if err := writer.Write(header); err != nil {
@@ -286,19 +293,18 @@ func writeCSVOptimized(filename string, packets []PacketResult, outputLength int
 
 	// Write data rows
 	for _, p := range packets {
-		// Prepare row based on actual packet size
-		currentRowSize := len(p.Data)
+		rowSize := len(p.Data)
 		if hasClassLabels {
-			currentRowSize += 1
+			rowSize++
 		}
-		row := make([]string, currentRowSize)
+		row := make([]string, rowSize)
 
-		// Byte columns first
+		// Convert bytes to strings
 		for i, b := range p.Data {
 			row[i] = strconv.Itoa(int(b))
 		}
 
-		// Class column last (if present)
+		// Add class label if present
 		if hasClassLabels {
 			row[len(p.Data)] = p.Class
 		}
@@ -312,29 +318,29 @@ func writeCSVOptimized(filename string, packets []PacketResult, outputLength int
 }
 
 // writeParquet writes packets to Parquet format with the same schema as CSV.
+// Packets are expected to be already standardized by the parser.
+// For variable-length packets (outputLength==0), all packets are padded to max size for consistent schema.
 func writeParquet(filename string, packets []PacketResult, outputLength int) error {
 	if len(packets) == 0 {
 		return fmt.Errorf("no packets to write")
 	}
 
-	// Determine if we have class labels (check first packet)
-	hasClassLabels := len(packets) > 0 && packets[0].Class != ""
+	// Determine if we have class labels
+	hasClassLabels := packets[0].Class != ""
 
-	// Determine max packet size for variable-length packets
-	maxPacketSize := outputLength
+	// For variable-length packets (outputLength==0), pad all to max size for consistent schema
 	if outputLength == 0 {
-		for _, p := range packets {
-			if len(p.Data) > maxPacketSize {
-				maxPacketSize = len(p.Data)
-			}
-		}
+		packets = padToMaxSize(packets)
 	}
 
+	// Determine packet size (all packets should now be same size)
+	packetSize := len(packets[0].Data)
+
 	// Build dynamic struct type with byte columns and optional class column
-	fields := make([]reflect.StructField, 0, maxPacketSize+1)
+	fields := make([]reflect.StructField, 0, packetSize+1)
 
 	// Add byte columns
-	for i := 0; i < maxPacketSize; i++ {
+	for i := 0; i < packetSize; i++ {
 		fields = append(fields, reflect.StructField{
 			Name: fmt.Sprintf("Byte_%d", i),
 			Type: reflect.TypeOf(int32(0)),
@@ -360,18 +366,18 @@ func writeParquet(filename string, packets []PacketResult, outputLength int) err
 		rowPtr := reflect.New(structType)
 		row := rowPtr.Elem()
 
-		// Set byte values
-		for i := 0; i < maxPacketSize; i++ {
+		// Set byte values (packets are already padded to consistent size)
+		for i := 0; i < packetSize; i++ {
 			if i < len(p.Data) {
 				row.Field(i).SetInt(int64(p.Data[i]))
 			} else {
-				row.Field(i).SetInt(0) // Pad with zeros
+				row.Field(i).SetInt(0) // Safety padding
 			}
 		}
 
 		// Set class value if present
 		if hasClassLabels {
-			row.Field(maxPacketSize).SetString(p.Class)
+			row.Field(packetSize).SetString(p.Class)
 		}
 
 		rowValues[idx] = rowPtr.Interface()

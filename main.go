@@ -244,13 +244,9 @@ func processDatasetStreaming(datasetDir, outputFile, outputFormat string, output
 
 	fmt.Printf("\nTotal files to process: %d\n\n", len(fileJobs))
 
-	// Determine max packet size
-	maxPacketSize := outputLength
-	if maxPacketSize == 0 {
-		maxPacketSize = 1500 // Default MTU
-	}
-
 	// Create streaming writer
+	// Note: maxPacketSize is only used for pre-allocating buffers in CSV writer
+	// The actual packet size is determined by outputLength in the parser
 	hasClass := len(fileJobs) > 0 && fileJobs[0].Class != ""
 	var writer StreamWriter
 
@@ -258,10 +254,15 @@ func processDatasetStreaming(datasetDir, outputFile, outputFormat string, output
 	fmt.Printf("Output: %s\n", outputFile)
 	fmt.Printf("Workers per file: %d\n\n", runtime.NumCPU())
 
+	bufferSize := outputLength
+	if bufferSize == 0 {
+		bufferSize = 1500 // Default for buffer allocation only
+	}
+
 	if outputFormat == "parquet" {
-		writer, err = NewParquetStreamWriter(outputFile, maxPacketSize, hasClass)
+		writer, err = NewParquetStreamWriter(outputFile, bufferSize, hasClass)
 	} else {
-		writer, err = NewCSVStreamWriter(outputFile, maxPacketSize, hasClass)
+		writer, err = NewCSVStreamWriter(outputFile, bufferSize, hasClass)
 	}
 
 	if err != nil {
@@ -330,10 +331,9 @@ func processSingleFileStreaming(inputFile, outputFile, outputFormat string, outp
 
 	t0 := time.Now()
 
-	// Determine max packet size
-	maxPacketSize := outputLength
-	if maxPacketSize == 0 {
-		maxPacketSize = 1500
+	bufferSize := outputLength
+	if bufferSize == 0 {
+		bufferSize = 1500 // Default for buffer allocation only
 	}
 
 	// Create writer
@@ -341,9 +341,9 @@ func processSingleFileStreaming(inputFile, outputFile, outputFormat string, outp
 	var err error
 
 	if outputFormat == "parquet" {
-		writer, err = NewParquetStreamWriter(outputFile, maxPacketSize, false)
+		writer, err = NewParquetStreamWriter(outputFile, bufferSize, false)
 	} else {
-		writer, err = NewCSVStreamWriter(outputFile, maxPacketSize, false)
+		writer, err = NewCSVStreamWriter(outputFile, bufferSize, false)
 	}
 
 	if err != nil {

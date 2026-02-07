@@ -37,13 +37,7 @@ type FileJob struct {
 	Class    string
 }
 
-// truncatePad returns a slice of exactly 'length' bytes.
-// If data is longer, it's truncated. If shorter, it's padded with zeros.
-func truncatePad(data []byte, length int) []byte {
-	res := make([]byte, length)
-	copy(res, data)
-	return res
-}
+// Note: truncatePad has been moved to packet_utils.go for better modularity
 
 // maskIPAddresses masks source and destination IP addresses in the packet.
 // It handles both IPv4 and IPv6 packets.
@@ -219,13 +213,12 @@ func processFile(fileJob FileJob, outputLength int, sortPackets bool, workersPer
 		})
 	}
 
-	// Truncate/pad all packets (only if outputLength > 0)
+	// Standardize packet lengths consistently
+	// If outputLength > 0: truncate/pad to that length
+	// If outputLength == 0: keep original size
 	for i := range finalPackets {
 		finalPackets[i].OriginalSize = len(finalPackets[i].Data)
-		if outputLength > 0 {
-			finalPackets[i].Data = truncatePad(finalPackets[i].Data, outputLength)
-		}
-		// If outputLength == 0, keep original size (no padding/truncating)
+		finalPackets[i].Data = standardizePacketLength(finalPackets[i].Data, outputLength)
 	}
 
 	return finalPackets, nil
@@ -261,9 +254,8 @@ func processFileStreaming(fileJob FileJob, writer StreamWriter, outputLength int
 	go func() {
 		for res := range results {
 			res.OriginalSize = len(res.Data)
-			if outputLength > 0 {
-				res.Data = truncatePad(res.Data, outputLength)
-			}
+			// Standardize packet length consistently
+			res.Data = standardizePacketLength(res.Data, outputLength)
 			if err := writer.WritePacket(res); err != nil {
 				writeErr = err
 				break
@@ -426,10 +418,11 @@ func processFilesStreamingPerFile(fileJobs []FileJob, outputDir string, outputFo
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 
-	// Determine max packet size (needed for writer initialization)
-	maxPacketSize := outputLength
-	if maxPacketSize == 0 {
-		maxPacketSize = 1500 // Default MTU size
+	// For streaming writers, we need to know the expected packet size for buffer allocation
+	// If outputLength > 0: use that, otherwise use a reasonable default for buffer sizing
+	bufferSize := outputLength
+	if bufferSize == 0 {
+		bufferSize = 1500 // Default for buffer allocation only
 	}
 
 	// Create channel for file jobs
@@ -473,9 +466,9 @@ func processFilesStreamingPerFile(fileJobs []FileJob, outputDir string, outputFo
 				hasClass := fileJob.Class != ""
 
 				if outputFormat == "parquet" {
-					writer, err = NewParquetStreamWriter(outputFile, maxPacketSize, hasClass)
+					writer, err = NewParquetStreamWriter(outputFile, bufferSize, hasClass)
 				} else {
-					writer, err = NewCSVStreamWriter(outputFile, maxPacketSize, hasClass)
+					writer, err = NewCSVStreamWriter(outputFile, bufferSize, hasClass)
 				}
 
 				if err != nil {
