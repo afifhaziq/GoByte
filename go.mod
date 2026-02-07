@@ -1,6 +1,6 @@
 module GoByte
 
-go 1.25.6
+go 1.24.9
 
 require (
 	github.com/google/gopacket v1.1.19
