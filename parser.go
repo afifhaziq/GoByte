@@ -45,9 +45,88 @@ func truncatePad(data []byte, length int) []byte {
 	return res
 }
 
+// maskIPAddresses masks source and destination IP addresses in the packet.
+// It handles both IPv4 and IPv6 packets.
+func maskIPAddresses(data []byte) []byte {
+	if len(data) < 20 {
+		// Too short to be a valid IP packet
+		return data
+	}
+
+	// Check IP version (upper 4 bits of first byte)
+	version := data[0] >> 4
+
+	switch version {
+	case 4: // IPv4
+		return maskIPv4(data)
+	case 6: // IPv6
+		return maskIPv6(data)
+	default:
+		// Not an IP packet, return as-is
+		return data
+	}
+}
+
+// maskIPv4 masks IPv4 source and destination addresses
+func maskIPv4(data []byte) []byte {
+	if len(data) < 20 {
+		return data
+	}
+
+	// IPv4 header structure:
+	// Byte 0: Version (4 bits) + IHL (4 bits)
+	// Bytes 12-15: Source IP
+	// Bytes 16-19: Destination IP
+
+	// Extract IHL (Internet Header Length) from lower 4 bits of first byte
+	// IHL specifies header length in 32-bit words (minimum 5, maximum 15)
+	ihl := int(data[0]&0x0F) * 4 // Convert to bytes
+
+	// Validate header length
+	if len(data) < ihl || ihl < 20 {
+		return data // Invalid header
+	}
+
+	// Zero out source IP (bytes 12-15)
+	for i := 12; i < 16; i++ {
+		data[i] = 0
+	}
+
+	// Zero out destination IP (bytes 16-19)
+	for i := 16; i < 20; i++ {
+		data[i] = 0
+	}
+
+	return data
+}
+
+// maskIPv6 masks IPv6 source and destination addresses
+func maskIPv6(data []byte) []byte {
+	if len(data) < 40 {
+		return data
+	}
+
+	// IPv6 header structure (fixed 40 bytes):
+	// Bytes 0-3:   Version (4 bits) + Traffic Class (8 bits) + Flow Label (20 bits)
+	// Bytes 8-23:  Source IP (128 bits = 16 bytes)
+	// Bytes 24-39: Destination IP (128 bits = 16 bytes)
+
+	// Zero out source IP (bytes 8-23)
+	for i := 8; i < 24; i++ {
+		data[i] = 0
+	}
+
+	// Zero out destination IP (bytes 24-39)
+	for i := 24; i < 40; i++ {
+		data[i] = 0
+	}
+
+	return data
+}
+
 // worker processes packets from the jobs channel and sends results to the results channel.
 // This is the core packet processing logic that runs in parallel.
-func worker(jobs <-chan PacketJob, results chan<- PacketResult, wg *sync.WaitGroup) {
+func worker(jobs <-chan PacketJob, results chan<- PacketResult, wg *sync.WaitGroup, maskIP bool) {
 	defer wg.Done()
 	for job := range jobs {
 
@@ -64,6 +143,11 @@ func worker(jobs <-chan PacketJob, results chan<- PacketResult, wg *sync.WaitGro
 			dataCopy := make([]uint8, len(payload))
 			copy(dataCopy, payload)
 
+			// Apply IP masking if requested
+			if maskIP && len(dataCopy) > 0 {
+				dataCopy = maskIPAddresses(dataCopy)
+			}
+
 			results <- PacketResult{
 				Index:    job.Index,
 				Data:     dataCopy,
@@ -76,7 +160,7 @@ func worker(jobs <-chan PacketJob, results chan<- PacketResult, wg *sync.WaitGro
 
 // processFile processes a single PCAP/PCAPNG file and returns all packets with metadata.
 // This function uses packet-level parallelism with worker goroutines.
-func processFile(fileJob FileJob, outputLength int, sortPackets bool, workersPerFile int) ([]PacketResult, error) {
+func processFile(fileJob FileJob, outputLength int, sortPackets bool, workersPerFile int, maskIP bool) ([]PacketResult, error) {
 	// Open PCAP file
 	handle, err := pcap.OpenOffline(fileJob.FilePath)
 	if err != nil {
@@ -94,7 +178,7 @@ func processFile(fileJob FileJob, outputLength int, sortPackets bool, workersPer
 	var wg sync.WaitGroup
 	for w := 0; w < workersPerFile; w++ {
 		wg.Add(1)
-		go worker(jobs, results, &wg)
+		go worker(jobs, results, &wg, maskIP)
 	}
 
 	// Start collector goroutine
@@ -149,7 +233,7 @@ func processFile(fileJob FileJob, outputLength int, sortPackets bool, workersPer
 
 // processFileStreaming processes a single PCAP/PCAPNG file and streams packets directly to a writer.
 // This is the memory-efficient version that doesn't accumulate packets in memory.
-func processFileStreaming(fileJob FileJob, writer StreamWriter, outputLength int, workersPerFile int) (int, error) {
+func processFileStreaming(fileJob FileJob, writer StreamWriter, outputLength int, workersPerFile int, maskIP bool) (int, error) {
 	// Open PCAP file
 	handle, err := pcap.OpenOffline(fileJob.FilePath)
 	if err != nil {
@@ -167,7 +251,7 @@ func processFileStreaming(fileJob FileJob, writer StreamWriter, outputLength int
 	var wg sync.WaitGroup
 	for w := 0; w < workersPerFile; w++ {
 		wg.Add(1)
-		go worker(jobs, results, &wg)
+		go worker(jobs, results, &wg, maskIP)
 	}
 
 	// Start writer goroutine that streams packets directly to disk
@@ -219,7 +303,7 @@ func processFileStreaming(fileJob FileJob, writer StreamWriter, outputLength int
 
 // processFilesParallel processes multiple files with limited parallelism.
 // Each file is processed with its own set of packet workers.
-func processFilesParallel(fileJobs []FileJob, outputLength int, sortPackets bool, maxConcurrentFiles int) []PacketResult {
+func processFilesParallel(fileJobs []FileJob, outputLength int, sortPackets bool, maxConcurrentFiles int, maskIP bool) []PacketResult {
 	// Calculate workers per file
 	totalCores := runtime.NumCPU()
 	workersPerFile := totalCores / maxConcurrentFiles
@@ -250,7 +334,7 @@ func processFilesParallel(fileJobs []FileJob, outputLength int, sortPackets bool
 			for fileJob := range fileChannel {
 				fmt.Printf("[Worker %d] Processing %s (class: %s)\n", workerID, filepath.Base(fileJob.FilePath), fileJob.Class)
 
-				packets, err := processFile(fileJob, outputLength, sortPackets, workersPerFile)
+				packets, err := processFile(fileJob, outputLength, sortPackets, workersPerFile, maskIP)
 				if err != nil {
 					log.Printf("[Worker %d] Error processing %s: %v\n", workerID, fileJob.FilePath, err)
 					continue
@@ -272,7 +356,7 @@ func processFilesParallel(fileJobs []FileJob, outputLength int, sortPackets bool
 
 // processFilesStreamingSingleOutput processes multiple files and streams all packets to a single output file.
 // This is memory-efficient as packets are written immediately without accumulation.
-func processFilesStreamingSingleOutput(fileJobs []FileJob, writer StreamWriter, outputLength int, maxConcurrentFiles int) (int, error) {
+func processFilesStreamingSingleOutput(fileJobs []FileJob, writer StreamWriter, outputLength int, maxConcurrentFiles int, maskIP bool) (int, error) {
 	// Calculate workers per file
 	totalCores := runtime.NumCPU()
 	workersPerFile := totalCores / maxConcurrentFiles
@@ -297,7 +381,7 @@ func processFilesStreamingSingleOutput(fileJobs []FileJob, writer StreamWriter, 
 		fileNum++
 		fmt.Printf("[%d/%d] Processing %s (class: %s)\n", fileNum, len(fileJobs), filepath.Base(fileJob.FilePath), fileJob.Class)
 
-		count, err := processFileStreaming(fileJob, writer, outputLength, workersPerFile)
+		count, err := processFileStreaming(fileJob, writer, outputLength, workersPerFile, maskIP)
 		if err != nil {
 			log.Printf("Error processing %s: %v\n", fileJob.FilePath, err)
 			processErr = err
@@ -325,7 +409,7 @@ func processFilesStreamingSingleOutput(fileJobs []FileJob, writer StreamWriter, 
 
 // processFilesStreamingPerFile processes multiple files and creates a separate output file for each input file.
 // This is the most memory-efficient approach and allows parallel processing.
-func processFilesStreamingPerFile(fileJobs []FileJob, outputDir string, outputFormat string, outputLength int, maxConcurrentFiles int) error {
+func processFilesStreamingPerFile(fileJobs []FileJob, outputDir string, outputFormat string, outputLength int, maxConcurrentFiles int, maskIP bool) error {
 	// Calculate workers per file
 	totalCores := runtime.NumCPU()
 	workersPerFile := totalCores / maxConcurrentFiles
@@ -405,7 +489,7 @@ func processFilesStreamingPerFile(fileJobs []FileJob, outputDir string, outputFo
 				}
 
 				// Process file
-				count, err := processFileStreaming(fileJob, writer, outputLength, workersPerFile)
+				count, err := processFileStreaming(fileJob, writer, outputLength, workersPerFile, maskIP)
 				writer.Close()
 
 				if err != nil {

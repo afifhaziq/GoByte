@@ -18,26 +18,27 @@
 Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
 ```
 
-##  Features
+## Features
 
--  **High Performance**: Concurrent packet processing using Go's goroutines
--  **Multiple Formats**: Export to CSV or Parquet (compressed, columnar format)
--  **Class Labels**: Automatic labeling from directory structure (e.g., `dataset/malware/*.pcap`)
--  **Batch Processing**: Process multiple PCAP files in parallel
--  **Flexible Output**: Fixed-length padding/truncation or variable-length packets
--  **Deep Learning-ready**: Direct output for PyTorch, TensorFlow, scikit-learn
--  **PCAP/PCAPNG Support**: Handles both formats automatically
+- **High Performance**: Concurrent packet processing using Go's goroutines
+- **Memory Efficient**: Streaming mode for processing large datasets with minimal RAM usage
+- **Multiple Formats**: Export to CSV or Parquet (compressed, columnar format)
+- **Class Labels**: Automatic labeling from directory structure (e.g., `dataset/malware/*.pcap`)
+- **Batch Processing**: Process multiple PCAP files in parallel
+- **Flexible Output**: Fixed-length padding/truncation or variable-length packets
+- **Deep Learning Ready**: Direct output for PyTorch, TensorFlow, scikit-learn
+- **PCAP/PCAPNG Support**: Handles both formats automatically
 
-##  Use Cases
+## Use Cases
 
-- **Network Traffic Classification**: Application traffic classification, IoT traffic classification
-- **Intrusion Detection Systems (IDS)**: Anomaly detection, Attack detection
-- **Network Behavior Analysis**: Application identification, protocol analysis
-- **Deep Learning Research**: CNN, RNN, Transformer models for network traffic
+- **Network Traffic Classification**: Application identification, IoT device classification
+- **Intrusion Detection Systems**: Anomaly detection, signature-based detection
+- **Network Behavior Analysis**: Protocol analysis, traffic profiling
+- **Deep Learning Preprocessing**: CNN, RNN, Transformer models for packet analysis
 
 ---
 
-##  Installation
+## Installation
 
 ### Option 1: Download Pre-built Binaries (Recommended)
 
@@ -118,11 +119,12 @@ go build -o gobyte .
 
 ### Don't Have PCAP Files? Download Sample Dataset
 
-If you're new to network traffic analysis and don't have PCAP files to start with, download MalayaNetwork_GT, our ready-to-use dataset:
+If you're new to network traffic analysis and don't have PCAP files to start with, download MalayaNetwork_GT, our ready-to-use dataset. 
+
+The easiest way to install this dataset is to use the `uv` package manager (No virtual environment required). Click this link [uv](https://docs.astral.sh/uv/getting-started/installation/) to install it.
 
 ```bash
 # Install uv (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Download the MalayaNetwork_GT dataset (13.5 GB, 10 traffic classes)
 uvx hf download Afifhaziq/MalayaNetwork_GT \
@@ -130,8 +132,8 @@ uvx hf download Afifhaziq/MalayaNetwork_GT \
     --local-dir ./dataset \
     --include "PCAP/*"
 
-# Process the entire dataset with GoByte
-gobyte --dataset dataset/PCAP --format parquet --concurrent 4 --length 1500
+# Process the entire dataset with GoByte (streaming mode for large datasets)
+gobyte --dataset dataset/PCAP --format parquet --length 1500 --streaming
 ```
 
 This will download network traffic from 10 application classes:
@@ -190,12 +192,19 @@ dataset/
     └── file2.pcap
 ```
 
-Process all files and automatically assign class labels (Ready for Deep Learning Training):
+Process all files and automatically assign class labels:
 
 ```bash
-gobyte --dataset dataset --format parquet --concurrent 4
+gobyte --dataset dataset --format parquet --length 1500
 ```
-Note: You may need to encode the labels before training.
+
+For large datasets, use streaming mode:
+
+```bash
+gobyte --dataset dataset --format parquet --length 1500 --streaming
+```
+
+Note: Labels are automatically extracted from directory names. You may need to encode them numerically before training.
 
 ---
 
@@ -216,9 +225,20 @@ Options:
   --length int
         Desired length of output bytes (pad/truncate). 0 = keep original size (default: 0)
   --sort
-        Retain packets order. set to false to shuffle (default: true)
+        Retain packets order. Set to false to shuffle (default: true)
   --concurrent int
         Max concurrent files to process (multi-file mode) (default: 2)
+  --streaming
+        Use streaming mode for memory efficiency (default: false)
+  --per-file
+        Create separate output file for each input file (dataset mode only)
+
+Memory Optimization:
+  --streaming      Stream packets to disk (low memory, ~200-300MB RAM)
+  --per-file       Create one output per input file (lowest memory, parallel)
+
+Note: Default mode loads all packets in memory (fast, high memory usage)
+      Streaming mode: less memory, processes files sequentially
 ```
 
 ### Examples
@@ -229,7 +249,7 @@ gobyte --input data.pcap
 # Output: output/output.csv
 ```
 
-#### Example 2: Fixed-Length Packets
+#### Example 2: Fixed-Length Packets (Recommended for Deep Learning)
 ```bash
 gobyte --input data.pcap --length 1500 --format parquet
 # All packets padded/truncated to exactly 1500 bytes
@@ -237,12 +257,23 @@ gobyte --input data.pcap --length 1500 --format parquet
 
 #### Example 3: Multi-File Dataset with Labels
 ```bash
-gobyte --dataset my_dataset --format parquet --concurrent 8
-# Processes 8 PCAP files at a time and assigns labels from directory names
+gobyte --dataset my_dataset --format parquet --concurrent 4
+# Processes multiple files in parallel and assigns labels from directory names
 ```
 
-#### Example 4: Variable-Length Packets (Keep Original Sizes)
-Note: This will typically be slower based on the length of the payload
+#### Example 4: Large Dataset with Streaming Mode
+```bash
+gobyte --dataset my_dataset --format parquet --length 1500 --streaming
+# Memory-efficient processing for large datasets (uses ~200-300MB RAM)
+```
+
+#### Example 5: Per-File Output Mode
+```bash
+gobyte --dataset my_dataset --format parquet --per-file
+# Creates separate output file for each input file (maximum memory efficiency)
+```
+
+#### Example 6: Variable-Length Packets
 ```bash
 gobyte --input data.pcap --length 0 --format csv
 # Keeps original packet sizes (no padding/truncation)
@@ -250,35 +281,74 @@ gobyte --input data.pcap --length 0 --format csv
 
 ---
 
-##  Output Formats
+## Output Formats
 
-Both CSV and Parquet use the **exact same schema** for compatibility with ML frameworks.
+Both CSV and Parquet use the same schema for compatibility with ML frameworks.
 
-### Schema (Both Formats)
+### CSV Format
+- Human-readable text format
+- Large file sizes
+- Compatible with all data analysis tools
+- Use for small to medium datasets
+
+### Parquet Format (Recommended)
+- Compressed columnar format
+- 10-20x smaller than CSV
+- Optimized for ML frameworks (PyTorch, TensorFlow)
+- Use for large datasets and production workflows
+
+### Schema
 
 **Fixed-Length** (`--length 1500`):
 ```
-Byte_0,Byte_1,Byte_2,...,Byte_1499,Class
-8,0,69,0,0,...,0,benign
-8,0,69,0,0,...,0,malware
+Byte_0, Byte_1, Byte_2, ..., Byte_1499, Class
+8, 0, 69, 0, 0, ..., 0, benign
+8, 0, 69, 0, 0, ..., 0, malware
 ```
 
 **Variable-Length** (`--length 0`):
 ```
-Byte_0,Byte_1,Byte_2,...,Class
-8,0,69,0,0,benign
-8,0,69,0,0,52,malware
+Byte_0, Byte_1, Byte_2, ..., Class
+8, 0, 69, 0, 0, benign
+8, 0, 69, 0, 0, 52, malware
 ```
 
 ---
 
+
+## Performance
+
+### Processing Modes
+
+**Default Mode (In-Memory)**
+- Fastest processing speed
+- High memory usage (5-6 GB per million packets)
+- Best for: Small to medium datasets, high-RAM servers
+
+**Streaming Mode**
+- Memory-efficient (200-300 MB constant usage)
+- Slightly slower (sequential processing)
+- Best for: Large datasets, limited RAM environments
+
+**Per-File Mode**
+- Lowest memory usage with parallel processing
+- Creates separate output files
+- Best for: Massive datasets, per-class analysis
+
+### Benchmark (12.5M packets, 31 files)
+
+| Mode | Memory | Time | Output |
+|------|--------|------|--------|
+| Default | ~15 GB | 5 min | Single file |
+| Streaming | ~250 MB | 6 min | Single file |
+| Per-File | ~250 MB | 5 min | 31 files |
 
 ### Project Structure
 ```
 GoByte/
 ├── main.go              # CLI entry point and orchestration
 ├── parser.go            # PCAP parsing and concurrent processing
-├── writer.go            # CSV/Parquet export logic
+├── writer.go            # CSV/Parquet export with streaming support
 ├── go.mod               # Go module definition
 ├── go.sum               # Dependency checksums
 ├── dataset/             # Sample PCAP files (not committed)

@@ -34,6 +34,7 @@ func main() {
 	maxConcurrentFiles := flag.Int("concurrent", 2, "Max concurrent files to process (multi-file mode)")
 	streamingMode := flag.Bool("streaming", false, "Use streaming mode for memory efficiency (default: false)")
 	perFileOutput := flag.Bool("per-file", false, "Create separate output file for each input file (dataset mode only, enables streaming)")
+	ipMask := flag.Bool("ipmask", false, "Mask source and destination IP addresses")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s\n", banner)
@@ -95,13 +96,13 @@ func main() {
 		// Multi-file mode with class labels
 		if *perFileOutput {
 			// Per-file output mode (most memory efficient, enables streaming automatically)
-			processDatasetPerFile(*datasetDir, *outputFormat, *outputLength, *maxConcurrentFiles)
+			processDatasetPerFile(*datasetDir, *outputFormat, *outputLength, *maxConcurrentFiles, *ipMask)
 		} else if *streamingMode {
 			// Streaming mode (memory efficient, single output)
-			processDatasetStreaming(*datasetDir, *outputFile, *outputFormat, *outputLength, *maxConcurrentFiles)
+			processDatasetStreaming(*datasetDir, *outputFile, *outputFormat, *outputLength, *maxConcurrentFiles, *ipMask)
 		} else {
 			// Default mode (loads all in memory - fast, high memory usage)
-			finalPackets := processDataset(*datasetDir, *outputLength, *sortPackets, *maxConcurrentFiles)
+			finalPackets := processDataset(*datasetDir, *outputLength, *sortPackets, *maxConcurrentFiles, *ipMask)
 			tProcess := time.Since(t0)
 			fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
 
@@ -121,10 +122,10 @@ func main() {
 	} else {
 		// Single file mode
 		if *streamingMode {
-			processSingleFileStreaming(*inputFile, *outputFile, *outputFormat, *outputLength)
+			processSingleFileStreaming(*inputFile, *outputFile, *outputFormat, *outputLength, *ipMask)
 		} else {
 			// Default mode (loads all in memory)
-			finalPackets := processSingleFile(*inputFile, *outputLength, *sortPackets)
+			finalPackets := processSingleFile(*inputFile, *outputLength, *sortPackets, *ipMask)
 			tProcess := time.Since(t0)
 			fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
 
@@ -145,7 +146,7 @@ func main() {
 }
 
 // processSingleFile processes a single PCAP file (backward compatible mode)
-func processSingleFile(filePath string, outputLength int, sortPackets bool) []PacketResult {
+func processSingleFile(filePath string, outputLength int, sortPackets bool, maskIP bool) []PacketResult {
 	fmt.Printf("Mode: Single file\n")
 	fmt.Printf("Processing: %s\n\n", filePath)
 
@@ -154,7 +155,7 @@ func processSingleFile(filePath string, outputLength int, sortPackets bool) []Pa
 		Class:    "",
 	}
 
-	packets, err := processFile(fileJob, outputLength, sortPackets, runtime.NumCPU())
+	packets, err := processFile(fileJob, outputLength, sortPackets, runtime.NumCPU(), maskIP)
 	if err != nil {
 		log.Fatalf("Failed to process file: %v", err)
 	}
@@ -212,7 +213,7 @@ func discoverDatasetFiles(datasetDir string) ([]FileJob, error) {
 }
 
 // processDataset processes multiple PCAP files organized by class directories (legacy mode)
-func processDataset(datasetDir string, outputLength int, sortPackets bool, maxConcurrentFiles int) []PacketResult {
+func processDataset(datasetDir string, outputLength int, sortPackets bool, maxConcurrentFiles int, maskIP bool) []PacketResult {
 	fmt.Printf("Mode: Multi-file dataset\n")
 	fmt.Printf("Dataset directory: %s\n", datasetDir)
 	fmt.Printf("Max concurrent files: %d\n\n", maxConcurrentFiles)
@@ -225,11 +226,11 @@ func processDataset(datasetDir string, outputLength int, sortPackets bool, maxCo
 	fmt.Printf("\nTotal files to process: %d\n", len(fileJobs))
 
 	// Process files with hybrid parallelism
-	return processFilesParallel(fileJobs, outputLength, sortPackets, maxConcurrentFiles)
+	return processFilesParallel(fileJobs, outputLength, sortPackets, maxConcurrentFiles, maskIP)
 }
 
 // processDatasetStreaming processes dataset with streaming output (memory efficient, single file)
-func processDatasetStreaming(datasetDir, outputFile, outputFormat string, outputLength, maxConcurrentFiles int) {
+func processDatasetStreaming(datasetDir, outputFile, outputFormat string, outputLength, maxConcurrentFiles int, maskIP bool) {
 	fmt.Printf("Mode: Multi-file dataset (streaming)\n")
 	fmt.Printf("Dataset directory: %s\n", datasetDir)
 	fmt.Printf("Output format: %s\n\n", outputFormat)
@@ -268,7 +269,7 @@ func processDatasetStreaming(datasetDir, outputFile, outputFormat string, output
 	}
 
 	// Process all files streaming to single output
-	totalPackets, err := processFilesStreamingSingleOutput(fileJobs, writer, outputLength, maxConcurrentFiles)
+	totalPackets, err := processFilesStreamingSingleOutput(fileJobs, writer, outputLength, maxConcurrentFiles, maskIP)
 	writer.Close()
 
 	if err != nil {
@@ -289,7 +290,7 @@ func processDatasetStreaming(datasetDir, outputFile, outputFormat string, output
 }
 
 // processDatasetPerFile processes dataset with per-file output (maximum memory efficiency)
-func processDatasetPerFile(datasetDir, outputFormat string, outputLength, maxConcurrentFiles int) {
+func processDatasetPerFile(datasetDir, outputFormat string, outputLength, maxConcurrentFiles int, maskIP bool) {
 	fmt.Printf("Mode: Multi-file dataset (per-file output)\n")
 	fmt.Printf("Dataset directory: %s\n", datasetDir)
 	fmt.Printf("Output format: %s\n\n", outputFormat)
@@ -307,7 +308,7 @@ func processDatasetPerFile(datasetDir, outputFormat string, outputLength, maxCon
 	outputDir := filepath.Join("output", "per_file_"+time.Now().Format("20060102_150405"))
 
 	// Process files with per-file output
-	err = processFilesStreamingPerFile(fileJobs, outputDir, outputFormat, outputLength, maxConcurrentFiles)
+	err = processFilesStreamingPerFile(fileJobs, outputDir, outputFormat, outputLength, maxConcurrentFiles, maskIP)
 	if err != nil {
 		log.Fatalf("Error during processing: %v", err)
 	}
@@ -322,7 +323,7 @@ func processDatasetPerFile(datasetDir, outputFormat string, outputLength, maxCon
 }
 
 // processSingleFileStreaming processes a single file with streaming output
-func processSingleFileStreaming(inputFile, outputFile, outputFormat string, outputLength int) {
+func processSingleFileStreaming(inputFile, outputFile, outputFormat string, outputLength int, maskIP bool) {
 	fmt.Printf("Mode: Single file (streaming)\n")
 	fmt.Printf("Processing: %s\n", inputFile)
 	fmt.Printf("Output: %s\n\n", outputFile)
@@ -355,7 +356,7 @@ func processSingleFileStreaming(inputFile, outputFile, outputFormat string, outp
 		Class:    "",
 	}
 
-	totalPackets, err := processFileStreaming(fileJob, writer, outputLength, runtime.NumCPU())
+	totalPackets, err := processFileStreaming(fileJob, writer, outputLength, runtime.NumCPU(), maskIP)
 	writer.Close()
 
 	if err != nil {
