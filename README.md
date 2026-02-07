@@ -336,36 +336,6 @@ Byte_0, Byte_1, Byte_2, ..., Class
 8, 0, 69, 0, 0, 52, malware
 ```
 
----
-
-
-## Performance
-
-### Processing Modes
-
-**Default Mode (In-Memory)**
-- Fastest processing speed
-- High memory usage (5-6 GB per million packets)
-- Best for: Small to medium datasets, high-RAM servers
-
-**Streaming Mode**
-- Memory-efficient (200-300 MB constant usage)
-- Slightly slower (sequential processing)
-- Best for: Large datasets, limited RAM environments
-
-**Per-File Mode**
-- Lowest memory usage with parallel processing
-- Creates separate output files
-- Best for: Massive datasets, per-class analysis
-
-### Benchmark (12.5M packets, 31 files)
-
-| Mode | Memory | Time | Output |
-|------|--------|------|--------|
-| Default | ~15 GB | 5 min | Single file |
-| Streaming | ~250 MB | 6 min | Single file |
-| Per-File | ~250 MB | 5 min | 31 files |
-
 ### Project Structure
 ```
 GoByte/
