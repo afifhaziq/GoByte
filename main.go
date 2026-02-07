@@ -30,8 +30,10 @@ func main() {
 	outputFormat := flag.String("format", "csv", "Output format: csv or parquet")
 	outputFile := flag.String("output", "", "Output file path (default: output.csv or output.parquet)")
 	outputLength := flag.Int("length", 0, "Desired length of output bytes (pad/truncate). 0 = keep original size (default: 0)")
-	sortPackets := flag.Bool("sort", true, "Retain packets order. set to false to shuffle (default: true)")
+	sortPackets := flag.Bool("sort", true, "Retain packets order. set to false to shuffle")
 	maxConcurrentFiles := flag.Int("concurrent", 2, "Max concurrent files to process (multi-file mode)")
+	streamingMode := flag.Bool("streaming", false, "Use streaming mode for memory efficiency (default: false)")
+	perFileOutput := flag.Bool("per-file", false, "Create separate output file for each input file (dataset mode only, enables streaming)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "%s\n", banner)
@@ -41,13 +43,19 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
 		fmt.Fprintf(os.Stderr, "  Single file mode:\n")
 		fmt.Fprintf(os.Stderr, "    %s --input data.pcap --format parquet\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "    %s --input data.pcap --output results.csv --length 2048\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "    %s --input data.pcap --output results.csv --length 512\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\n  Multi-file mode (with class labels):\n")
 		fmt.Fprintf(os.Stderr, "    %s --dataset ./dataset --format parquet --concurrent 2\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "    %s --dataset ./dataset --per-file --streaming\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "    Dataset structure: dataset/class_a/*.pcap, dataset/class_b/*.pcap\n")
 		fmt.Fprintf(os.Stderr, "\nFormats:\n")
 		fmt.Fprintf(os.Stderr, "  csv     - Standard CSV format (large files)\n")
-		fmt.Fprintf(os.Stderr, "  parquet - Compressed columnar format (recommended for ML)\n")
+		fmt.Fprintf(os.Stderr, "  parquet - Compressed columnar format (recommended for ML/DL)\n")
+		fmt.Fprintf(os.Stderr, "\nMemory Optimization (for large datasets):\n")
+		fmt.Fprintf(os.Stderr, "  --streaming      - Stream packets to disk (low memory, ~200-300MB RAM)\n")
+		fmt.Fprintf(os.Stderr, "  --per-file       - Create one output per input file (lowest memory, parallel)\n")
+		fmt.Fprintf(os.Stderr, "\nNote: Default mode loads all packets in memory (fast, high memory usage)\n")
+		fmt.Fprintf(os.Stderr, "      Streaming mode: less memory, processes files sequentially\n")
 	}
 
 	flag.Parse()
@@ -81,35 +89,59 @@ func main() {
 	}
 
 	t0 := time.Now()
-	var finalPackets []PacketResult
 
 	// Mode selection
 	if *datasetDir != "" {
 		// Multi-file mode with class labels
-		finalPackets = processDataset(*datasetDir, *outputLength, *sortPackets, *maxConcurrentFiles)
-	} else {
-		// Single file mode (backward compatible)
-		finalPackets = processSingleFile(*inputFile, *outputLength, *sortPackets)
-	}
+		if *perFileOutput {
+			// Per-file output mode (most memory efficient, enables streaming automatically)
+			processDatasetPerFile(*datasetDir, *outputFormat, *outputLength, *maxConcurrentFiles)
+		} else if *streamingMode {
+			// Streaming mode (memory efficient, single output)
+			processDatasetStreaming(*datasetDir, *outputFile, *outputFormat, *outputLength, *maxConcurrentFiles)
+		} else {
+			// Default mode (loads all in memory - fast, high memory usage)
+			finalPackets := processDataset(*datasetDir, *outputLength, *sortPackets, *maxConcurrentFiles)
+			tProcess := time.Since(t0)
+			fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
 
-	tProcess := time.Since(t0)
-	fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
-
-	// Export to chosen format
-	tWrite := time.Now()
-	if *outputFormat == "parquet" {
-		if err := writeParquet(*outputFile, finalPackets, *outputLength); err != nil {
-			log.Fatalf("failed to write parquet: %v", err)
+			tWrite := time.Now()
+			if *outputFormat == "parquet" {
+				if err := writeParquet(*outputFile, finalPackets, *outputLength); err != nil {
+					log.Fatalf("failed to write parquet: %v", err)
+				}
+			} else {
+				if err := writeCSVOptimized(*outputFile, finalPackets, *outputLength); err != nil {
+					log.Fatalf("failed to write csv: %v", err)
+				}
+			}
+			tWriteDuration := time.Since(tWrite)
+			printSummary(len(finalPackets), *outputFile, *outputLength, tProcess, tWriteDuration, time.Since(t0))
 		}
 	} else {
-		if err := writeCSVOptimized(*outputFile, finalPackets, *outputLength); err != nil {
-			log.Fatalf("failed to write csv: %v", err)
+		// Single file mode
+		if *streamingMode {
+			processSingleFileStreaming(*inputFile, *outputFile, *outputFormat, *outputLength)
+		} else {
+			// Default mode (loads all in memory)
+			finalPackets := processSingleFile(*inputFile, *outputLength, *sortPackets)
+			tProcess := time.Since(t0)
+			fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
+
+			tWrite := time.Now()
+			if *outputFormat == "parquet" {
+				if err := writeParquet(*outputFile, finalPackets, *outputLength); err != nil {
+					log.Fatalf("failed to write parquet: %v", err)
+				}
+			} else {
+				if err := writeCSVOptimized(*outputFile, finalPackets, *outputLength); err != nil {
+					log.Fatalf("failed to write csv: %v", err)
+				}
+			}
+			tWriteDuration := time.Since(tWrite)
+			printSummary(len(finalPackets), *outputFile, *outputLength, tProcess, tWriteDuration, time.Since(t0))
 		}
 	}
-	tWriteDuration := time.Since(tWrite)
-
-	// Print summary
-	printSummary(len(finalPackets), *outputFile, *outputLength, tProcess, tWriteDuration, time.Since(t0))
 }
 
 // processSingleFile processes a single PCAP file (backward compatible mode)
@@ -130,16 +162,11 @@ func processSingleFile(filePath string, outputLength int, sortPackets bool) []Pa
 	return packets
 }
 
-// processDataset processes multiple PCAP files organized by class directories
-func processDataset(datasetDir string, outputLength int, sortPackets bool, maxConcurrentFiles int) []PacketResult {
-	fmt.Printf("Mode: Multi-file dataset\n")
-	fmt.Printf("Dataset directory: %s\n", datasetDir)
-	fmt.Printf("Max concurrent files: %d\n\n", maxConcurrentFiles)
-
-	// Discover all class directories
+// discoverDatasetFiles scans the dataset directory and returns all PCAP/PCAPNG files with their classes
+func discoverDatasetFiles(datasetDir string) ([]FileJob, error) {
 	entries, err := os.ReadDir(datasetDir)
 	if err != nil {
-		log.Fatalf("Failed to read dataset directory: %v", err)
+		return nil, fmt.Errorf("failed to read dataset directory: %w", err)
 	}
 
 	var fileJobs []FileJob
@@ -167,7 +194,6 @@ func processDataset(datasetDir string, outputLength int, sortPackets bool, maxCo
 		}
 
 		allFiles := append(pcapFiles, pcapngFiles...)
-
 		fmt.Printf("Found class '%s': %d files\n", className, len(allFiles))
 
 		for _, file := range allFiles {
@@ -179,13 +205,174 @@ func processDataset(datasetDir string, outputLength int, sortPackets bool, maxCo
 	}
 
 	if len(fileJobs) == 0 {
-		log.Fatal("No PCAP/PCAPNG files found in dataset directory")
+		return nil, fmt.Errorf("no PCAP/PCAPNG files found in dataset directory")
+	}
+
+	return fileJobs, nil
+}
+
+// processDataset processes multiple PCAP files organized by class directories (legacy mode)
+func processDataset(datasetDir string, outputLength int, sortPackets bool, maxConcurrentFiles int) []PacketResult {
+	fmt.Printf("Mode: Multi-file dataset\n")
+	fmt.Printf("Dataset directory: %s\n", datasetDir)
+	fmt.Printf("Max concurrent files: %d\n\n", maxConcurrentFiles)
+
+	fileJobs, err := discoverDatasetFiles(datasetDir)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	fmt.Printf("\nTotal files to process: %d\n", len(fileJobs))
 
 	// Process files with hybrid parallelism
 	return processFilesParallel(fileJobs, outputLength, sortPackets, maxConcurrentFiles)
+}
+
+// processDatasetStreaming processes dataset with streaming output (memory efficient, single file)
+func processDatasetStreaming(datasetDir, outputFile, outputFormat string, outputLength, maxConcurrentFiles int) {
+	fmt.Printf("Mode: Multi-file dataset (streaming)\n")
+	fmt.Printf("Dataset directory: %s\n", datasetDir)
+	fmt.Printf("Output format: %s\n\n", outputFormat)
+
+	t0 := time.Now()
+
+	fileJobs, err := discoverDatasetFiles(datasetDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("\nTotal files to process: %d\n\n", len(fileJobs))
+
+	// Determine max packet size
+	maxPacketSize := outputLength
+	if maxPacketSize == 0 {
+		maxPacketSize = 1500 // Default MTU
+	}
+
+	// Create streaming writer
+	hasClass := len(fileJobs) > 0 && fileJobs[0].Class != ""
+	var writer StreamWriter
+
+	fmt.Printf("Processing %d files with streaming output (memory-efficient mode)\n", len(fileJobs))
+	fmt.Printf("Output: %s\n", outputFile)
+	fmt.Printf("Workers per file: %d\n\n", runtime.NumCPU())
+
+	if outputFormat == "parquet" {
+		writer, err = NewParquetStreamWriter(outputFile, maxPacketSize, hasClass)
+	} else {
+		writer, err = NewCSVStreamWriter(outputFile, maxPacketSize, hasClass)
+	}
+
+	if err != nil {
+		log.Fatalf("Failed to create writer: %v", err)
+	}
+
+	// Process all files streaming to single output
+	totalPackets, err := processFilesStreamingSingleOutput(fileJobs, writer, outputLength, maxConcurrentFiles)
+	writer.Close()
+
+	if err != nil {
+		log.Fatalf("Error during processing: %v", err)
+	}
+
+	tTotal := time.Since(t0)
+
+	// Print summary
+	fmt.Printf("\nStreaming mode completed:\n")
+	fmt.Printf(" - Total packets: %d\n", totalPackets)
+	fmt.Printf(" - Total time:    %v\n", tTotal)
+	if info, err := os.Stat(outputFile); err == nil {
+		sizeMB := float64(info.Size()) / (1024 * 1024)
+		fmt.Printf(" - File size:     %.2f MB\n", sizeMB)
+	}
+	fmt.Printf(" - Output:        %s\n", outputFile)
+}
+
+// processDatasetPerFile processes dataset with per-file output (maximum memory efficiency)
+func processDatasetPerFile(datasetDir, outputFormat string, outputLength, maxConcurrentFiles int) {
+	fmt.Printf("Mode: Multi-file dataset (per-file output)\n")
+	fmt.Printf("Dataset directory: %s\n", datasetDir)
+	fmt.Printf("Output format: %s\n\n", outputFormat)
+
+	t0 := time.Now()
+
+	fileJobs, err := discoverDatasetFiles(datasetDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("\nTotal files to process: %d\n\n", len(fileJobs))
+
+	// Create output directory
+	outputDir := filepath.Join("output", "per_file_"+time.Now().Format("20060102_150405"))
+
+	// Process files with per-file output
+	err = processFilesStreamingPerFile(fileJobs, outputDir, outputFormat, outputLength, maxConcurrentFiles)
+	if err != nil {
+		log.Fatalf("Error during processing: %v", err)
+	}
+
+	tTotal := time.Since(t0)
+
+	// Print summary
+	fmt.Printf("\nPer-file mode completed:\n")
+	fmt.Printf(" - Total files:   %d\n", len(fileJobs))
+	fmt.Printf(" - Total time:    %v\n", tTotal)
+	fmt.Printf(" - Output dir:    %s\n", outputDir)
+}
+
+// processSingleFileStreaming processes a single file with streaming output
+func processSingleFileStreaming(inputFile, outputFile, outputFormat string, outputLength int) {
+	fmt.Printf("Mode: Single file (streaming)\n")
+	fmt.Printf("Processing: %s\n", inputFile)
+	fmt.Printf("Output: %s\n\n", outputFile)
+
+	t0 := time.Now()
+
+	// Determine max packet size
+	maxPacketSize := outputLength
+	if maxPacketSize == 0 {
+		maxPacketSize = 1500
+	}
+
+	// Create writer
+	var writer StreamWriter
+	var err error
+
+	if outputFormat == "parquet" {
+		writer, err = NewParquetStreamWriter(outputFile, maxPacketSize, false)
+	} else {
+		writer, err = NewCSVStreamWriter(outputFile, maxPacketSize, false)
+	}
+
+	if err != nil {
+		log.Fatalf("Failed to create writer: %v", err)
+	}
+
+	// Process file
+	fileJob := FileJob{
+		FilePath: inputFile,
+		Class:    "",
+	}
+
+	totalPackets, err := processFileStreaming(fileJob, writer, outputLength, runtime.NumCPU())
+	writer.Close()
+
+	if err != nil {
+		log.Fatalf("Error processing file: %v", err)
+	}
+
+	tTotal := time.Since(t0)
+
+	// Print summary
+	fmt.Printf("\nStreaming mode completed:\n")
+	fmt.Printf(" - Total packets: %d\n", totalPackets)
+	fmt.Printf(" - Total time:    %v\n", tTotal)
+	if info, err := os.Stat(outputFile); err == nil {
+		sizeMB := float64(info.Size()) / (1024 * 1024)
+		fmt.Printf(" - File size:     %.2f MB\n", sizeMB)
+	}
+	fmt.Printf(" - Output:        %s\n", outputFile)
 }
 
 // printSummary displays a formatted summary of the processing results

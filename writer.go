@@ -6,10 +6,231 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"runtime"
+	"runtime/debug"
 	"strconv"
+	"sync"
 
 	"github.com/parquet-go/parquet-go"
 )
+
+// StreamWriter interface for incremental packet writing (memory-efficient)
+type StreamWriter interface {
+	WritePacket(p PacketResult) error
+	Close() error
+}
+
+// CSVStreamWriter writes packets to CSV incrementally
+type CSVStreamWriter struct {
+	file          *os.File
+	bufWriter     *bufio.Writer
+	csvWriter     *csv.Writer
+	maxPacketSize int
+	hasClass      bool
+	headerWritten bool
+	flushCounter  int      // Track writes for periodic flushing
+	rowBuffer     []string // Reusable row buffer to reduce allocations
+	mutex         sync.Mutex
+}
+
+// NewCSVStreamWriter creates a new streaming CSV writer
+func NewCSVStreamWriter(filename string, maxPacketSize int, hasClass bool) (*CSVStreamWriter, error) {
+	file, err := os.Create(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file: %w", err)
+	}
+
+	// Reduced buffer size for WSL2 stability (128KB instead of 4MB)
+	bufWriter := bufio.NewWriterSize(file, 128*1024)
+	csvWriter := csv.NewWriter(bufWriter)
+
+	// Pre-allocate reusable row buffer
+	rowSize := maxPacketSize
+	if hasClass {
+		rowSize++
+	}
+
+	w := &CSVStreamWriter{
+		file:          file,
+		bufWriter:     bufWriter,
+		csvWriter:     csvWriter,
+		maxPacketSize: maxPacketSize,
+		hasClass:      hasClass,
+		headerWritten: false,
+		flushCounter:  0,
+		rowBuffer:     make([]string, rowSize),
+	}
+
+	// Write header
+	if err := w.writeHeader(); err != nil {
+		file.Close()
+		return nil, err
+	}
+
+	return w, nil
+}
+
+func (w *CSVStreamWriter) writeHeader() error {
+	headerSize := w.maxPacketSize
+	if w.hasClass {
+		headerSize += 1
+	}
+
+	header := make([]string, headerSize)
+	for i := 0; i < w.maxPacketSize; i++ {
+		header[i] = fmt.Sprintf("Byte_%d", i)
+	}
+	if w.hasClass {
+		header[w.maxPacketSize] = "Class"
+	}
+
+	w.headerWritten = true
+	return w.csvWriter.Write(header)
+}
+
+func (w *CSVStreamWriter) WritePacket(p PacketResult) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	// Pad packet if needed
+	data := p.Data
+	if len(data) < w.maxPacketSize {
+		padded := make([]byte, w.maxPacketSize)
+		copy(padded, data)
+		data = padded
+	} else if len(data) > w.maxPacketSize {
+		data = data[:w.maxPacketSize]
+	}
+
+	// Reuse row buffer instead of allocating new one
+	for i, b := range data {
+		w.rowBuffer[i] = strconv.Itoa(int(b))
+	}
+
+	if w.hasClass {
+		w.rowBuffer[w.maxPacketSize] = p.Class
+	}
+
+	if err := w.csvWriter.Write(w.rowBuffer); err != nil {
+		return err
+	}
+
+	w.flushCounter++
+
+	// CRITICAL: Flush every 10K packets to prevent memory buildup
+	if w.flushCounter >= 10000 {
+		w.csvWriter.Flush()
+		if err := w.csvWriter.Error(); err != nil {
+			return fmt.Errorf("csv flush error: %w", err)
+		}
+		w.bufWriter.Flush()
+		w.flushCounter = 0
+
+		// Force garbage collection to free memory
+		runtime.GC()
+		debug.FreeOSMemory()
+	}
+
+	return nil
+}
+
+func (w *CSVStreamWriter) Close() error {
+	// Final flush before closing
+	w.csvWriter.Flush()
+	if err := w.csvWriter.Error(); err != nil {
+		w.file.Close()
+		return fmt.Errorf("csv final flush error: %w", err)
+	}
+	if err := w.bufWriter.Flush(); err != nil {
+		w.file.Close()
+		return fmt.Errorf("buffer final flush error: %w", err)
+	}
+	return w.file.Close()
+}
+
+// ParquetPacket is a simple struct for Parquet without reflection overhead
+type ParquetPacket struct {
+	Data  []byte `parquet:"data"`
+	Class string `parquet:"class,optional"`
+}
+
+// ParquetStreamWriter writes packets to Parquet incrementally (memory-efficient)
+type ParquetStreamWriter struct {
+	file          *os.File
+	writer        *parquet.Writer
+	maxPacketSize int
+	hasClass      bool
+	flushCounter  int // Track writes for periodic flushing
+	mutex         sync.Mutex
+}
+
+// NewParquetStreamWriter creates a new streaming Parquet writer
+func NewParquetStreamWriter(filename string, maxPacketSize int, hasClass bool) (*ParquetStreamWriter, error) {
+	file, err := os.Create(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file: %w", err)
+	}
+
+	// Create simple schema-based writer (no reflection per packet!)
+	schema := parquet.SchemaOf(ParquetPacket{})
+	writer := parquet.NewWriter(file, schema,
+		parquet.Compression(&parquet.Zstd),
+		parquet.PageBufferSize(256*1024), // Smaller page buffer for memory efficiency
+	)
+
+	return &ParquetStreamWriter{
+		file:          file,
+		writer:        writer,
+		maxPacketSize: maxPacketSize,
+		hasClass:      hasClass,
+		flushCounter:  0,
+	}, nil
+}
+
+func (w *ParquetStreamWriter) WritePacket(p PacketResult) error {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+
+	// Simple struct write (no reflection!)
+	packet := ParquetPacket{
+		Data:  p.Data,
+		Class: p.Class,
+	}
+
+	if err := w.writer.Write(packet); err != nil {
+		return err
+	}
+
+	w.flushCounter++
+
+	// CRITICAL: Flush every 50K packets to prevent memory buildup
+	if w.flushCounter >= 50000 {
+		// Flush parquet buffer to disk
+		if err := w.writer.Flush(); err != nil {
+			return fmt.Errorf("flush error: %w", err)
+		}
+		w.flushCounter = 0
+
+		// Force garbage collection to free memory
+		runtime.GC()
+		debug.FreeOSMemory()
+	}
+
+	return nil
+}
+
+func (w *ParquetStreamWriter) Close() error {
+	// Final flush before closing
+	if err := w.writer.Flush(); err != nil {
+		w.file.Close()
+		return err
+	}
+	if err := w.writer.Close(); err != nil {
+		w.file.Close()
+		return err
+	}
+	return w.file.Close()
+}
 
 // writeCSVOptimized writes packets to CSV with optimizations:
 

@@ -1,5 +1,6 @@
 # Project Documentation
-AGENTS.md
+*.md
+!README.md
 /.cursor/
 # Input Data
 /dataset/
