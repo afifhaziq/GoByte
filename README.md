@@ -153,15 +153,6 @@ This will download network traffic from 10 application classes:
 
 View the dataset on Hugging Face:
 
-[![Dataset on HF](https://huggingface.co/datasets/huggingface/badges/resolve/main/dataset-on-hf-lg-dark.svg)](https://huggingface.co/datasets/Afifhaziq/MalayaNetwork_GT)
-
-<iframe
-  src="https://huggingface.co/datasets/Afifhaziq/MalayaNetwork_GT/embed/viewer/by_application/bittorent"
-  frameborder="0"
-  width="100%"
-  height="500px"
-></iframe>
-
 ---
 
 ### Single File Processing
@@ -306,7 +297,7 @@ gobyte --dataset my_dataset --length 1500 --ipmask --streaming --format parquet
 
 ## Output Formats
 
-Both CSV and Parquet use the same schema for compatibility with ML frameworks.
+Both CSV and Parquet use the same schema for compatibility with ML/DL frameworks.
 
 ### CSV Format
 - Human-readable text format
@@ -325,15 +316,15 @@ Both CSV and Parquet use the same schema for compatibility with ML frameworks.
 **Fixed-Length** (`--length 1500`):
 ```
 Byte_0, Byte_1, Byte_2, ..., Byte_1499, Class
-8, 0, 69, 0, 0, ..., 0, benign
-8, 0, 69, 0, 0, ..., 0, malware
+69, 0, 0, ..., 0, benign
+69, 0, 0, ..., 0, malware
 ```
 
 **Variable-Length** (`--length 0`):
 ```
 Byte_0, Byte_1, Byte_2, ..., Class
-8, 0, 69, 0, 0, benign
-8, 0, 69, 0, 0, 52, malware
+69, 0, 0, benign
+69, 0, 0, 52, malware
 ```
 
 ### Project Structure
