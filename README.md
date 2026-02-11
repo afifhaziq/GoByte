@@ -157,10 +157,6 @@ This will download network traffic from 10 application classes:
 
 ---
 
-For more usage examples, see the [Examples](#examples) section below.
-
----
-
 ## Usage
 
 ```
