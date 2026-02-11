@@ -96,6 +96,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install libpcap
+        run: brew install libpcap
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
