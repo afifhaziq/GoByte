@@ -8,27 +8,16 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: Build Release Binaries
+  build-linux:
+    name: Build Linux Binaries
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - goos: linux
-            goarch: amd64
+          - goarch: amd64
             name: gobyte-linux-amd64
-          - goos: linux
-            goarch: arm64
+          - goarch: arm64
             name: gobyte-linux-arm64
-          - goos: windows
-            goarch: amd64
-            name: gobyte-windows-amd64.exe
-          - goos: darwin
-            goarch: amd64
-            name: gobyte-darwin-amd64
-          - goos: darwin
-            goarch: arm64
-            name: gobyte-darwin-arm64
 
     steps:
       - name: Checkout code
@@ -47,7 +36,76 @@ jobs:
 
       - name: Build binary
         env:
-          GOOS: ${{ matrix.goos }}
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -ldflags="-s -w" -o ${{ matrix.name }} .
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./${{ matrix.name }}
+          asset_name: ${{ matrix.name }}
+          asset_content_type: application/octet-stream
+
+  build-windows:
+    name: Build Windows Binary
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary
+        run: |
+          go build -ldflags="-s -w" -o gobyte-windows-amd64.exe .
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./gobyte-windows-amd64.exe
+          asset_name: gobyte-windows-amd64.exe
+          asset_content_type: application/octet-stream
+
+  build-macos:
+    name: Build macOS Binaries
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - goarch: amd64
+            name: gobyte-darwin-amd64
+          - goarch: arm64
+            name: gobyte-darwin-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary
+        env:
           GOARCH: ${{ matrix.goarch }}
         run: |
           go build -ldflags="-s -w" -o ${{ matrix.name }} .
