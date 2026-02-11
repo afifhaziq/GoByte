@@ -8,16 +8,9 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
-    name: Build Linux Binaries
+  build-linux-amd64:
+    name: Build Linux AMD64
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - goarch: amd64
-            name: gobyte-linux-amd64
-          - goarch: arm64
-            name: gobyte-linux-arm64
 
     steps:
       - name: Checkout code
@@ -35,11 +28,8 @@ jobs:
         run: go mod download
 
       - name: Build binary
-        env:
-          GOOS: linux
-          GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -ldflags="-s -w" -o ${{ matrix.name }} .
+          go build -ldflags="-s -w" -o gobyte-linux-amd64 .
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
@@ -47,17 +37,54 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./${{ matrix.name }}
-          asset_name: ${{ matrix.name }}
+          asset_path: ./gobyte-linux-amd64
+          asset_name: gobyte-linux-amd64
+          asset_content_type: application/octet-stream
+
+  build-linux-arm64:
+    name: Build Linux ARM64
+    runs-on: ubuntu-24.04-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install libpcap
+        run: sudo apt-get update && sudo apt-get install -y libpcap-dev
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary
+        run: |
+          go build -ldflags="-s -w" -o gobyte-linux-arm64 .
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./gobyte-linux-arm64
+          asset_name: gobyte-linux-arm64
           asset_content_type: application/octet-stream
 
   build-windows:
-    name: Build Windows Binary
+    name: Build Windows AMD64
     runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install WinPcap
+        run: |
+          choco install -y winpcap
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -81,16 +108,9 @@ jobs:
           asset_name: gobyte-windows-amd64.exe
           asset_content_type: application/octet-stream
 
-  build-macos:
-    name: Build macOS Binaries
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        include:
-          - goarch: amd64
-            name: gobyte-darwin-amd64
-          - goarch: arm64
-            name: gobyte-darwin-arm64
+  build-macos-arm64:
+    name: Build macOS ARM64 (Apple Silicon)
+    runs-on: macos-latest  # macos-latest uses M1 runners
 
     steps:
       - name: Checkout code
@@ -108,10 +128,8 @@ jobs:
         run: go mod download
 
       - name: Build binary
-        env:
-          GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -ldflags="-s -w" -o ${{ matrix.name }} .
+          go build -ldflags="-s -w" -o gobyte-darwin-arm64 .
 
       - name: Upload Release Asset
         uses: actions/upload-release-asset@v1
@@ -119,6 +137,39 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./${{ matrix.name }}
-          asset_name: ${{ matrix.name }}
+          asset_path: ./gobyte-darwin-arm64
+          asset_name: gobyte-darwin-arm64
+          asset_content_type: application/octet-stream
+
+  build-macos-amd64:
+    name: Build macOS AMD64 (Intel)
+    runs-on: macos-13  # macos-13 still uses Intel runners
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install libpcap
+        run: brew install libpcap
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary
+        run: |
+          go build -ldflags="-s -w" -o gobyte-darwin-amd64 .
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./gobyte-darwin-amd64
+          asset_name: gobyte-darwin-amd64
           asset_content_type: application/octet-stream
