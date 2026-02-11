@@ -225,7 +225,6 @@ func processFile(fileJob FileJob, outputLength int, sortPackets bool, workersPer
 }
 
 // processFileStreaming processes a single PCAP/PCAPNG file and streams packets directly to a writer.
-// This is the memory-efficient version that doesn't accumulate packets in memory.
 func processFileStreaming(fileJob FileJob, writer StreamWriter, outputLength int, workersPerFile int, maskIP bool) (int, error) {
 	// Open PCAP file
 	handle, err := pcap.OpenOffline(fileJob.FilePath)
@@ -237,8 +236,8 @@ func processFileStreaming(fileJob FileJob, writer StreamWriter, outputLength int
 	fileName := filepath.Base(fileJob.FilePath)
 
 	// Setup channels for packet processing
-	jobs := make(chan PacketJob, 256)
-	results := make(chan PacketResult, 256)
+	jobs := make(chan PacketJob, 512)
+	results := make(chan PacketResult, 512)
 
 	// Start workers for this file
 	var wg sync.WaitGroup
@@ -347,7 +346,6 @@ func processFilesParallel(fileJobs []FileJob, outputLength int, sortPackets bool
 }
 
 // processFilesStreamingSingleOutput processes multiple files and streams all packets to a single output file.
-// This is memory-efficient as packets are written immediately without accumulation.
 func processFilesStreamingSingleOutput(fileJobs []FileJob, writer StreamWriter, outputLength int, maxConcurrentFiles int, maskIP bool) (int, error) {
 	// Calculate workers per file
 	totalCores := runtime.NumCPU()
@@ -387,9 +385,12 @@ func processFilesStreamingSingleOutput(fileJobs []FileJob, writer StreamWriter, 
 		// Print memory stats
 		var m runtime.MemStats
 		runtime.ReadMemStats(&m)
+		allocMB := int(m.Alloc / 1024 / 1024)
+		sysMB := int(m.Sys / 1024 / 1024)
+
 		fmt.Printf("[%d/%d] Processed %s: %d packets\n", fileNum, len(fileJobs), filepath.Base(fileJob.FilePath), count)
 		fmt.Printf("        Memory: Alloc=%dMB, Sys=%dMB, TotalPackets=%d\n",
-			m.Alloc/1024/1024, m.Sys/1024/1024, totalPackets)
+			allocMB, sysMB, totalPackets)
 	}
 
 	if processErr != nil {
@@ -400,7 +401,6 @@ func processFilesStreamingSingleOutput(fileJobs []FileJob, writer StreamWriter, 
 }
 
 // processFilesStreamingPerFile processes multiple files and creates a separate output file for each input file.
-// This is the most memory-efficient approach and allows parallel processing.
 func processFilesStreamingPerFile(fileJobs []FileJob, outputDir string, outputFormat string, outputLength int, maxConcurrentFiles int, maskIP bool) error {
 	// Calculate workers per file
 	totalCores := runtime.NumCPU()

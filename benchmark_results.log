@@ -1,0 +1,375 @@
+==========================================
+GoByte Pre-Release Testing & Benchmarking
+==========================================
+
+[0;34mDataset Information:[0m
+  - Total files: 31
+  - Total size: 13G
+  - Classes: 10
+    - Bittorent
+    - ChromeRDP
+    - Discord
+    - EA_Origin
+    - Microsoft_Teams
+    - Slack
+    - Steam
+    - Teamviewer
+    - Webex
+    - Zoom
+
+[0;34mTest file: [0mMicrosoftTeams_5G_Daytime1.pcapng
+  - Size: 24M
+
+[0;34mBuilding GoByte...[0m
+[0;32m[PASS] Build successful[0m
+
+[0;34mTest 1: Single File → CSV[0m
+
+  ________      __________          __          
+ /  _____/  ____\______   \___.__._/  |_  ____  
+/   \  ___ /  _ \|    |  _<   |  |\   __\/ __ \ 
+\    \_\  (  <_> )    |   \\___  | |  | \  ___/ 
+ \______  /\____/|______  // ____| |__|  \___  >
+        \/              \/ \/                \/ 
+
+Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
+Mode: Single file (streaming)
+Processing: PCAP/Microsoft_Teams/MicrosoftTeams_5G_Daytime1.pcapng
+Output: output/test1.csv
+
+
+Streaming mode completed:
+ - Total packets: 30885
+ - Total time:    674.77622ms
+ - File size:     79.17 MB
+ - Output:        output/test1.csv
+
+  Peak RAM: 39 MB | Avg RAM: 35 MB
+  Output: 80M, 30885 packets
+[0;32m[PASS] Test 1 passed[0m
+
+[0;34mTest 2: Single File → Parquet[0m
+
+  ________      __________          __          
+ /  _____/  ____\______   \___.__._/  |_  ____  
+/   \  ___ /  _ \|    |  _<   |  |\   __\/ __ \ 
+\    \_\  (  <_> )    |   \\___  | |  | \  ___/ 
+ \______  /\____/|______  // ____| |__|  \___  >
+        \/              \/ \/                \/ 
+
+Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
+Mode: Single file (streaming)
+Processing: PCAP/Microsoft_Teams/MicrosoftTeams_5G_Daytime1.pcapng
+Output: output/test2.parquet
+
+
+Streaming mode completed:
+ - Total packets: 30885
+ - Total time:    162.616469ms
+ - File size:     22.11 MB
+ - Output:        output/test2.parquet
+
+  Peak RAM: 81 MB | Avg RAM: 45 MB
+  Output: 23M
+[0;32m[PASS] Test 2 passed[0m
+
+[0;34mTest 3: Fixed-Length Packets (1500 bytes) - CSV[0m
+
+  ________      __________          __          
+ /  _____/  ____\______   \___.__._/  |_  ____  
+/   \  ___ /  _ \|    |  _<   |  |\   __\/ __ \ 
+\    \_\  (  <_> )    |   \\___  | |  | \  ___/ 
+ \______  /\____/|______  // ____| |__|  \___  >
+        \/              \/ \/                \/ 
+
+Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
+Mode: Single file (streaming)
+Processing: PCAP/Microsoft_Teams/MicrosoftTeams_5G_Daytime1.pcapng
+Output: output/test3.csv
+
+
+Streaming mode completed:
+ - Total packets: 30885
+ - Total time:    915.424888ms
+ - File size:     122.25 MB
+ - Output:        output/test3.csv
+
+  Peak RAM: 39 MB | Avg RAM: 34 MB
+  Output: 123M, 30885 packets
+[0;32m[PASS] Test 3 passed[0m
+
+[0;34mTest 4: IP Address Masking (Fixed-Length 1500 bytes) - CSV[0m
+
+  ________      __________          __          
+ /  _____/  ____\______   \___.__._/  |_  ____  
+/   \  ___ /  _ \|    |  _<   |  |\   __\/ __ \ 
+\    \_\  (  <_> )    |   \\___  | |  | \  ___/ 
+ \______  /\____/|______  // ____| |__|  \___  >
+        \/              \/ \/                \/ 
+
+Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
+Mode: Single file (streaming)
+Processing: PCAP/Microsoft_Teams/MicrosoftTeams_5G_Daytime1.pcapng
+Output: output/test4.csv
+
+
+Streaming mode completed:
+ - Total packets: 30885
+ - Total time:    920.302116ms
+ - File size:     122.03 MB
+ - Output:        output/test4.csv
+
+  Peak RAM: 35 MB | Avg RAM: 31 MB
+  Output: 123M, 30885 packets
+[0;32m[PASS] Test 4 passed[0m
+
+[0;34mTest 5: Dataset Mode → NumPy with Streaming (Memory Efficient)[0m
+  Processing 31 files with streaming mode...
+
+  ________      __________          __          
+ /  _____/  ____\______   \___.__._/  |_  ____  
+/   \  ___ /  _ \|    |  _<   |  |\   __\/ __ \ 
+\    \_\  (  <_> )    |   \\___  | |  | \  ___/ 
+ \______  /\____/|______  // ____| |__|  \___  >
+        \/              \/ \/                \/ 
+
+Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
+Mode: Multi-file dataset (streaming)
+Dataset directory: PCAP
+Output format: numpy
+
+Found class 'Bittorent': 5 files
+Found class 'ChromeRDP': 3 files
+Found class 'Discord': 3 files
+Found class 'EA_Origin': 4 files
+Found class 'Microsoft_Teams': 2 files
+Found class 'Slack': 2 files
+Found class 'Steam': 4 files
+Found class 'Teamviewer': 2 files
+Found class 'Webex': 3 files
+Found class 'Zoom': 3 files
+
+Total files to process: 31
+
+Processing 31 files with streaming output (memory-efficient mode)
+Output: output/test5.npy
+Workers per file: 32
+
+[1/31] Processing Bittorent_4G_Nightime1.pcapng (class: Bittorent)
+[1/31] Processed Bittorent_4G_Nightime1.pcapng: 603005 packets
+        Memory: Alloc=15MB, Sys=43MB, TotalPackets=603005
+[2/31] Processing Bittorent_5G_Daytime1.pcapng (class: Bittorent)
+[2/31] Processed Bittorent_5G_Daytime1.pcapng: 453863 packets
+        Memory: Alloc=18MB, Sys=43MB, TotalPackets=1056868
+[3/31] Processing Bittorent_5G_Nightime1.pcapng (class: Bittorent)
+[3/31] Processed Bittorent_5G_Nightime1.pcapng: 743044 packets
+        Memory: Alloc=17MB, Sys=43MB, TotalPackets=1799912
+[4/31] Processing Bittorent_HomeBroadband_Nightime1.pcapng (class: Bittorent)
+[4/31] Processed Bittorent_HomeBroadband_Nightime1.pcapng: 451680 packets
+        Memory: Alloc=10MB, Sys=43MB, TotalPackets=2251592
+[5/31] Processing Bittorent_PublicWifi_Nightime1.pcapng (class: Bittorent)
+[5/31] Processed Bittorent_PublicWifi_Nightime1.pcapng: 268529 packets
+        Memory: Alloc=14MB, Sys=43MB, TotalPackets=2520121
+[6/31] Processing ChromeRDP_5G_Daytime1.pcapng (class: ChromeRDP)
+[6/31] Processed ChromeRDP_5G_Daytime1.pcapng: 103036 packets
+        Memory: Alloc=8MB, Sys=43MB, TotalPackets=2623157
+[7/31] Processing ChromeRDP_Campus_Daytime1.pcapng (class: ChromeRDP)
+[7/31] Processed ChromeRDP_Campus_Daytime1.pcapng: 54867 packets
+        Memory: Alloc=20MB, Sys=43MB, TotalPackets=2678024
+[8/31] Processing ChromeRDP_PublicWifi_Nightime1.pcapng (class: ChromeRDP)
+[8/31] Processed ChromeRDP_PublicWifi_Nightime1.pcapng: 29278 packets
+        Memory: Alloc=19MB, Sys=43MB, TotalPackets=2707302
+[9/31] Processing Discord_5G_Daytime1.pcapng (class: Discord)
+[9/31] Processed Discord_5G_Daytime1.pcapng: 40403 packets
+        Memory: Alloc=18MB, Sys=43MB, TotalPackets=2747705
+[10/31] Processing Discord_Campus_Daytime1.pcapng (class: Discord)
+[10/31] Processed Discord_Campus_Daytime1.pcapng: 90088 packets
+        Memory: Alloc=11MB, Sys=43MB, TotalPackets=2837793
+[11/31] Processing Discord_PublicWifi_Nightime1.pcapng (class: Discord)
+[11/31] Processed Discord_PublicWifi_Nightime1.pcapng: 36227 packets
+        Memory: Alloc=11MB, Sys=43MB, TotalPackets=2874020
+[12/31] Processing EAOrigin_5G_Daytime1.pcapng (class: EA_Origin)
+[12/31] Processed EAOrigin_5G_Daytime1.pcapng: 12042 packets
+        Memory: Alloc=19MB, Sys=43MB, TotalPackets=2886062
+[13/31] Processing EAOrigin_5G_Daytime2.pcapng (class: EA_Origin)
+[13/31] Processed EAOrigin_5G_Daytime2.pcapng: 2785003 packets
+        Memory: Alloc=19MB, Sys=43MB, TotalPackets=5671065
+[14/31] Processing EAOrigin_Campus_Daytime1.pcapng (class: EA_Origin)
+[14/31] Processed EAOrigin_Campus_Daytime1.pcapng: 859976 packets
+        Memory: Alloc=17MB, Sys=43MB, TotalPackets=6531041
+[15/31] Processing EAOrigin_HomeBroadband_Nighttime1.pcapng (class: EA_Origin)
+[15/31] Processed EAOrigin_HomeBroadband_Nighttime1.pcapng: 28761 packets
+        Memory: Alloc=11MB, Sys=43MB, TotalPackets=6559802
+[16/31] Processing MicrosoftTeams_5G_Daytime1.pcapng (class: Microsoft_Teams)
+[16/31] Processed MicrosoftTeams_5G_Daytime1.pcapng: 30885 packets
+        Memory: Alloc=13MB, Sys=43MB, TotalPackets=6590687
+[17/31] Processing MicrosoftTeams_Campus_Daytime1.pcapng (class: Microsoft_Teams)
+[17/31] Processed MicrosoftTeams_Campus_Daytime1.pcapng: 95868 packets
+        Memory: Alloc=16MB, Sys=43MB, TotalPackets=6686555
+[18/31] Processing Slack_5G_Daytime1.pcapng (class: Slack)
+[18/31] Processed Slack_5G_Daytime1.pcapng: 236711 packets
+        Memory: Alloc=19MB, Sys=43MB, TotalPackets=6923266
+[19/31] Processing Slack_Campus_Daytime1.pcapng (class: Slack)
+[19/31] Processed Slack_Campus_Daytime1.pcapng: 53268 packets
+        Memory: Alloc=22MB, Sys=43MB, TotalPackets=6976534
+[20/31] Processing Steam_5G_Daytime1.pcapng (class: Steam)
+[20/31] Processed Steam_5G_Daytime1.pcapng: 615866 packets
+        Memory: Alloc=8MB, Sys=43MB, TotalPackets=7592400
+[21/31] Processing Steam_Campus_Daytime1.pcapng (class: Steam)
+[21/31] Processed Steam_Campus_Daytime1.pcapng: 1577774 packets
+        Memory: Alloc=17MB, Sys=43MB, TotalPackets=9170174
+[22/31] Processing Steam_HomeBroadband_Nightime1.pcapng (class: Steam)
+[22/31] Processed Steam_HomeBroadband_Nightime1.pcapng: 2399845 packets
+        Memory: Alloc=19MB, Sys=43MB, TotalPackets=11570019
+[23/31] Processing Steam_PublicWiFi_Nightime1.pcapng (class: Steam)
+[23/31] Processed Steam_PublicWiFi_Nightime1.pcapng: 389679 packets
+        Memory: Alloc=22MB, Sys=43MB, TotalPackets=11959698
+[24/31] Processing Teamviewer_5G_Daytime1.pcapng (class: Teamviewer)
+[24/31] Processed Teamviewer_5G_Daytime1.pcapng: 194086 packets
+        Memory: Alloc=14MB, Sys=43MB, TotalPackets=12153784
+[25/31] Processing Teamviewer_HomeBroadband_Daytime1.pcapng (class: Teamviewer)
+[25/31] Processed Teamviewer_HomeBroadband_Daytime1.pcapng: 13471 packets
+        Memory: Alloc=11MB, Sys=43MB, TotalPackets=12167255
+[26/31] Processing Webex_5G_Daytime1.pcapng (class: Webex)
+[26/31] Processed Webex_5G_Daytime1.pcapng: 164885 packets
+        Memory: Alloc=13MB, Sys=43MB, TotalPackets=12332140
+[27/31] Processing Webex_Campus_Daytime1.pcapng (class: Webex)
+[27/31] Processed Webex_Campus_Daytime1.pcapng: 44108 packets
+        Memory: Alloc=18MB, Sys=43MB, TotalPackets=12376248
+[28/31] Processing Webex_HomeBroadband_Daytime1.pcapng (class: Webex)
+[28/31] Processed Webex_HomeBroadband_Daytime1.pcapng: 47444 packets
+        Memory: Alloc=9MB, Sys=43MB, TotalPackets=12423692
+[29/31] Processing Zoom_5G_Daytime1.pcapng (class: Zoom)
+[29/31] Processed Zoom_5G_Daytime1.pcapng: 71595 packets
+        Memory: Alloc=16MB, Sys=43MB, TotalPackets=12495287
+[30/31] Processing Zoom_Campus_Daytime1.pcapng (class: Zoom)
+[30/31] Processed Zoom_Campus_Daytime1.pcapng: 50228 packets
+        Memory: Alloc=9MB, Sys=43MB, TotalPackets=12545515
+[31/31] Processing Zoom_HomeBroadband_Nightime1.pcapng (class: Zoom)
+[31/31] Processed Zoom_HomeBroadband_Nightime1.pcapng: 38799 packets
+        Memory: Alloc=8MB, Sys=43MB, TotalPackets=12584314
+
+Streaming mode completed:
+ - Total packets: 12584314
+ - Total time:    16.234024781s
+ - Output:        output/test5.npy
+
+  Peak RAM: 55 MB | Avg RAM: 50 MB
+  Output: 18G (data.npy), 13M (labels.npy), 18G total, 1 packets
+[0;32m[PASS] Test 5 passed[0m
+
+[0;34mTest 6: Per-File Output Mode (Memory Efficient) - CSV[0m
+  Creating separate output for each input file...
+
+  ________      __________          __          
+ /  _____/  ____\______   \___.__._/  |_  ____  
+/   \  ___ /  _ \|    |  _<   |  |\   __\/ __ \ 
+\    \_\  (  <_> )    |   \\___  | |  | \  ___/ 
+ \______  /\____/|______  // ____| |__|  \___  >
+        \/              \/ \/                \/ 
+
+Fast PCAP Parser for Deep Learning | Network Traffic Preprocessing
+Mode: Multi-file dataset (per-file output)
+Dataset directory: PCAP
+Output format: csv
+
+Found class 'Bittorent': 5 files
+Found class 'ChromeRDP': 3 files
+Found class 'Discord': 3 files
+Found class 'EA_Origin': 4 files
+Found class 'Microsoft_Teams': 2 files
+Found class 'Slack': 2 files
+Found class 'Steam': 4 files
+Found class 'Teamviewer': 2 files
+Found class 'Webex': 3 files
+Found class 'Zoom': 3 files
+
+Total files to process: 31
+
+Processing 31 files with per-file output (maximum memory efficiency)
+Output directory: output/per_file_20260211_171509
+Max concurrent files: 6, Workers per file: 5
+
+[Worker 5] Processing Bittorent_4G_Nightime1.pcapng -> Bittorent_4G_Nightime1.csv
+[Worker 2] Processing Bittorent_5G_Daytime1.pcapng -> Bittorent_5G_Daytime1.csv
+[Worker 3] Processing Bittorent_5G_Nightime1.pcapng -> Bittorent_5G_Nightime1.csv
+[Worker 4] Processing Bittorent_HomeBroadband_Nightime1.pcapng -> Bittorent_HomeBroadband_Nightime1.csv
+[Worker 0] Processing Bittorent_PublicWifi_Nightime1.pcapng -> Bittorent_PublicWifi_Nightime1.csv
+[Worker 1] Processing ChromeRDP_5G_Daytime1.pcapng -> ChromeRDP_5G_Daytime1.csv
+[Worker 1] Completed ChromeRDP_5G_Daytime1.pcapng: 103036 packets -> ChromeRDP_5G_Daytime1.csv
+[Worker 1] Processing ChromeRDP_Campus_Daytime1.pcapng -> ChromeRDP_Campus_Daytime1.csv
+[Worker 1] Completed ChromeRDP_Campus_Daytime1.pcapng: 54867 packets -> ChromeRDP_Campus_Daytime1.csv
+[Worker 1] Processing ChromeRDP_PublicWifi_Nightime1.pcapng -> ChromeRDP_PublicWifi_Nightime1.csv
+[Worker 1] Completed ChromeRDP_PublicWifi_Nightime1.pcapng: 29278 packets -> ChromeRDP_PublicWifi_Nightime1.csv
+[Worker 1] Processing Discord_5G_Daytime1.pcapng -> Discord_5G_Daytime1.csv
+[Worker 1] Completed Discord_5G_Daytime1.pcapng: 40403 packets -> Discord_5G_Daytime1.csv
+[Worker 1] Processing Discord_Campus_Daytime1.pcapng -> Discord_Campus_Daytime1.csv
+[Worker 0] Completed Bittorent_PublicWifi_Nightime1.pcapng: 268529 packets -> Bittorent_PublicWifi_Nightime1.csv
+[Worker 0] Processing Discord_PublicWifi_Nightime1.pcapng -> Discord_PublicWifi_Nightime1.csv
+[Worker 0] Completed Discord_PublicWifi_Nightime1.pcapng: 36227 packets -> Discord_PublicWifi_Nightime1.csv
+[Worker 0] Processing EAOrigin_5G_Daytime1.pcapng -> EAOrigin_5G_Daytime1.csv
+[Worker 0] Completed EAOrigin_5G_Daytime1.pcapng: 12042 packets -> EAOrigin_5G_Daytime1.csv
+[Worker 0] Processing EAOrigin_5G_Daytime2.pcapng -> EAOrigin_5G_Daytime2.csv
+[Worker 1] Completed Discord_Campus_Daytime1.pcapng: 90088 packets -> Discord_Campus_Daytime1.csv
+[Worker 1] Processing EAOrigin_Campus_Daytime1.pcapng -> EAOrigin_Campus_Daytime1.csv
+[Worker 4] Completed Bittorent_HomeBroadband_Nightime1.pcapng: 451680 packets -> Bittorent_HomeBroadband_Nightime1.csv
+[Worker 4] Processing EAOrigin_HomeBroadband_Nighttime1.pcapng -> EAOrigin_HomeBroadband_Nighttime1.csv
+[Worker 2] Completed Bittorent_5G_Daytime1.pcapng: 453863 packets -> Bittorent_5G_Daytime1.csv
+[Worker 2] Processing MicrosoftTeams_5G_Daytime1.pcapng -> MicrosoftTeams_5G_Daytime1.csv
+[Worker 4] Completed EAOrigin_HomeBroadband_Nighttime1.pcapng: 28761 packets -> EAOrigin_HomeBroadband_Nighttime1.csv
+[Worker 4] Processing MicrosoftTeams_Campus_Daytime1.pcapng -> MicrosoftTeams_Campus_Daytime1.csv
+[Worker 2] Completed MicrosoftTeams_5G_Daytime1.pcapng: 30885 packets -> MicrosoftTeams_5G_Daytime1.csv
+[Worker 2] Processing Slack_5G_Daytime1.pcapng -> Slack_5G_Daytime1.csv
+[Worker 4] Completed MicrosoftTeams_Campus_Daytime1.pcapng: 95868 packets -> MicrosoftTeams_Campus_Daytime1.csv
+[Worker 4] Processing Slack_Campus_Daytime1.pcapng -> Slack_Campus_Daytime1.csv
+[Worker 5] Completed Bittorent_4G_Nightime1.pcapng: 603005 packets -> Bittorent_4G_Nightime1.csv
+[Worker 5] Processing Steam_5G_Daytime1.pcapng -> Steam_5G_Daytime1.csv
+[Worker 4] Completed Slack_Campus_Daytime1.pcapng: 53268 packets -> Slack_Campus_Daytime1.csv
+[Worker 4] Processing Steam_Campus_Daytime1.pcapng -> Steam_Campus_Daytime1.csv
+[Worker 2] Completed Slack_5G_Daytime1.pcapng: 236711 packets -> Slack_5G_Daytime1.csv
+[Worker 2] Processing Steam_HomeBroadband_Nightime1.pcapng -> Steam_HomeBroadband_Nightime1.csv
+[Worker 3] Completed Bittorent_5G_Nightime1.pcapng: 743044 packets -> Bittorent_5G_Nightime1.csv
+[Worker 3] Processing Steam_PublicWiFi_Nightime1.pcapng -> Steam_PublicWiFi_Nightime1.csv
+[Worker 3] Completed Steam_PublicWiFi_Nightime1.pcapng: 389679 packets -> Steam_PublicWiFi_Nightime1.csv
+[Worker 3] Processing Teamviewer_5G_Daytime1.pcapng -> Teamviewer_5G_Daytime1.csv
+[Worker 1] Completed EAOrigin_Campus_Daytime1.pcapng: 859976 packets -> EAOrigin_Campus_Daytime1.csv
+[Worker 1] Processing Teamviewer_HomeBroadband_Daytime1.pcapng -> Teamviewer_HomeBroadband_Daytime1.csv
+[Worker 1] Completed Teamviewer_HomeBroadband_Daytime1.pcapng: 13471 packets -> Teamviewer_HomeBroadband_Daytime1.csv
+[Worker 1] Processing Webex_5G_Daytime1.pcapng -> Webex_5G_Daytime1.csv
+[Worker 5] Completed Steam_5G_Daytime1.pcapng: 615866 packets -> Steam_5G_Daytime1.csv
+[Worker 5] Processing Webex_Campus_Daytime1.pcapng -> Webex_Campus_Daytime1.csv
+[Worker 5] Completed Webex_Campus_Daytime1.pcapng: 44108 packets -> Webex_Campus_Daytime1.csv
+[Worker 5] Processing Webex_HomeBroadband_Daytime1.pcapng -> Webex_HomeBroadband_Daytime1.csv
+[Worker 5] Completed Webex_HomeBroadband_Daytime1.pcapng: 47444 packets -> Webex_HomeBroadband_Daytime1.csv
+[Worker 5] Processing Zoom_5G_Daytime1.pcapng -> Zoom_5G_Daytime1.csv
+[Worker 3] Completed Teamviewer_5G_Daytime1.pcapng: 194086 packets -> Teamviewer_5G_Daytime1.csv
+[Worker 3] Processing Zoom_Campus_Daytime1.pcapng -> Zoom_Campus_Daytime1.csv
+[Worker 1] Completed Webex_5G_Daytime1.pcapng: 164885 packets -> Webex_5G_Daytime1.csv
+[Worker 1] Processing Zoom_HomeBroadband_Nightime1.pcapng -> Zoom_HomeBroadband_Nightime1.csv
+[Worker 3] Completed Zoom_Campus_Daytime1.pcapng: 50228 packets -> Zoom_Campus_Daytime1.csv
+[Worker 5] Completed Zoom_5G_Daytime1.pcapng: 71595 packets -> Zoom_5G_Daytime1.csv
+[Worker 1] Completed Zoom_HomeBroadband_Nightime1.pcapng: 38799 packets -> Zoom_HomeBroadband_Nightime1.csv
+[Worker 4] Completed Steam_Campus_Daytime1.pcapng: 1577774 packets -> Steam_Campus_Daytime1.csv
+[Worker 0] Completed EAOrigin_5G_Daytime2.pcapng: 2785003 packets -> EAOrigin_5G_Daytime2.csv
+[Worker 2] Completed Steam_HomeBroadband_Nightime1.pcapng: 2399845 packets -> Steam_HomeBroadband_Nightime1.csv
+
+Per-file mode completed:
+ - Total files:   31
+ - Total time:    9.232206123s
+ - Output dir:    output/per_file_20260211_171509
+
+  Peak RAM: 92 MB | Avg RAM: 68 MB
+  Output: 31 files, 2.0G total
+[0;32m[PASS] Test 6 passed[0m
+
+
+Summary:
+  - Build: PASS
+  - Single file CSV (variable-length): PASS
+  - Single file Parquet (variable-length): PASS
+  - Fixed-length packets (CSV): PASS
+  - IP masking (CSV): PASS
+  - Dataset mode NumPy with streaming: PASS
+  - Per-file output mode (CSV): PASS
+
+

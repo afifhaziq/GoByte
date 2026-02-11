@@ -32,7 +32,7 @@ func main() {
 	outputLength := flag.Int("length", 0, "Desired length of output bytes (pad/truncate). 0 = keep original size (default: 0)")
 	sortPackets := flag.Bool("sort", true, "Retain packets order. set to false to shuffle")
 	maxConcurrentFiles := flag.Int("concurrent", 2, "Max concurrent files to process (multi-file mode)")
-	streamingMode := flag.Bool("streaming", false, "Use streaming mode for memory efficiency (default: false)")
+	streamingMode := flag.Bool("streaming", true, "Use streaming mode for memory efficiency (default: true for dataset mode)")
 	perFileOutput := flag.Bool("per-file", false, "Create separate output file for each input file (dataset mode only, enables streaming)")
 	ipMask := flag.Bool("ipmask", false, "Mask source and destination IP addresses")
 
@@ -50,13 +50,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "    %s --dataset ./dataset --per-file --streaming\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "    Dataset structure: dataset/class_a/*.pcap, dataset/class_b/*.pcap\n")
 		fmt.Fprintf(os.Stderr, "\nFormats:\n")
-		fmt.Fprintf(os.Stderr, "  csv     - Standard CSV format (large files)\n")
-		fmt.Fprintf(os.Stderr, "  parquet - Compressed columnar format (recommended for ML/DL)\n")
-		fmt.Fprintf(os.Stderr, "\nMemory Optimization (for large datasets):\n")
-		fmt.Fprintf(os.Stderr, "  --streaming      - Stream packets to disk (low memory, ~200-300MB RAM)\n")
+		fmt.Fprintf(os.Stderr, "  csv     - Standard CSV format (large files, text-based)\n")
+		fmt.Fprintf(os.Stderr, "  parquet - Compressed columnar format (good for ML/DL)\n")
+		fmt.Fprintf(os.Stderr, "  numpy   - NumPy binary format (BEST for ML/DL, 10-100x smaller than CSV)\n")
+		fmt.Fprintf(os.Stderr, "\nMemory Optimization:\n")
+		fmt.Fprintf(os.Stderr, "  --streaming      - Stream packets to disk (default for --dataset, ~200-300MB RAM)\n")
+		fmt.Fprintf(os.Stderr, "  --streaming=false - Load all packets in memory (WARNING: can cause OOM for large datasets)\n")
 		fmt.Fprintf(os.Stderr, "  --per-file       - Create one output per input file (lowest memory, parallel)\n")
-		fmt.Fprintf(os.Stderr, "\nNote: Default mode loads all packets in memory (fast, high memory usage)\n")
-		fmt.Fprintf(os.Stderr, "      Streaming mode: less memory, processes files sequentially\n")
+		fmt.Fprintf(os.Stderr, "\nNote: Streaming mode is enabled by default for --dataset to prevent OOM errors.\n")
+		fmt.Fprintf(os.Stderr, "      For single files (--input), default is in-memory mode.\n")
 	}
 
 	flag.Parse()
@@ -73,6 +75,8 @@ func main() {
 	if *outputFile == "" {
 		if *outputFormat == "parquet" {
 			*outputFile = filepath.Join(outputDir, "output.parquet")
+		} else if *outputFormat == "numpy" {
+			*outputFile = filepath.Join(outputDir, "output.npy")
 		} else {
 			*outputFile = filepath.Join(outputDir, "output.csv")
 		}
@@ -98,10 +102,16 @@ func main() {
 			// Per-file output mode (most memory efficient, enables streaming automatically)
 			processDatasetPerFile(*datasetDir, *outputFormat, *outputLength, *maxConcurrentFiles, *ipMask)
 		} else if *streamingMode {
-			// Streaming mode (memory efficient, single output)
+			// Streaming mode (memory efficient, single output) - DEFAULT for dataset mode
 			processDatasetStreaming(*datasetDir, *outputFile, *outputFormat, *outputLength, *maxConcurrentFiles, *ipMask)
 		} else {
-			// Default mode (loads all in memory - fast, high memory usage)
+			// In-memory mode (loads all in memory - WARNING: can cause OOM for large datasets)
+			fmt.Println("\nWARNING: In-memory mode is enabled (--streaming=false)")
+			fmt.Println("   This mode loads ALL packets into RAM before writing.")
+			fmt.Println("   For large datasets, this can cause Out-Of-Memory (OOM) errors.")
+			fmt.Println("   Recommendation: Use --streaming (default) or --per-file for large datasets.")
+			fmt.Println()
+			
 			finalPackets := processDataset(*datasetDir, *outputLength, *sortPackets, *maxConcurrentFiles, *ipMask)
 			tProcess := time.Since(t0)
 			fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
@@ -110,6 +120,10 @@ func main() {
 			if *outputFormat == "parquet" {
 				if err := writeParquet(*outputFile, finalPackets, *outputLength); err != nil {
 					log.Fatalf("failed to write parquet: %v", err)
+				}
+			} else if *outputFormat == "numpy" {
+				if err := writeNumpy(*outputFile, finalPackets, *outputLength); err != nil {
+					log.Fatalf("failed to write numpy: %v", err)
 				}
 			} else {
 				if err := writeCSVOptimized(*outputFile, finalPackets, *outputLength); err != nil {
@@ -124,23 +138,27 @@ func main() {
 		if *streamingMode {
 			processSingleFileStreaming(*inputFile, *outputFile, *outputFormat, *outputLength, *ipMask)
 		} else {
-			// Default mode (loads all in memory)
-			finalPackets := processSingleFile(*inputFile, *outputLength, *sortPackets, *ipMask)
-			tProcess := time.Since(t0)
-			fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
+		// Default mode (loads all in memory)
+		finalPackets := processSingleFile(*inputFile, *outputLength, *sortPackets, *ipMask)
+		tProcess := time.Since(t0)
+		fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
 
-			tWrite := time.Now()
-			if *outputFormat == "parquet" {
-				if err := writeParquet(*outputFile, finalPackets, *outputLength); err != nil {
-					log.Fatalf("failed to write parquet: %v", err)
-				}
-			} else {
-				if err := writeCSVOptimized(*outputFile, finalPackets, *outputLength); err != nil {
-					log.Fatalf("failed to write csv: %v", err)
-				}
+		tWrite := time.Now()
+		if *outputFormat == "parquet" {
+			if err := writeParquet(*outputFile, finalPackets, *outputLength); err != nil {
+				log.Fatalf("failed to write parquet: %v", err)
 			}
-			tWriteDuration := time.Since(tWrite)
-			printSummary(len(finalPackets), *outputFile, *outputLength, tProcess, tWriteDuration, time.Since(t0))
+		} else if *outputFormat == "numpy" {
+			if err := writeNumpy(*outputFile, finalPackets, *outputLength); err != nil {
+				log.Fatalf("failed to write numpy: %v", err)
+			}
+		} else {
+			if err := writeCSVOptimized(*outputFile, finalPackets, *outputLength); err != nil {
+				log.Fatalf("failed to write csv: %v", err)
+			}
+		}
+		tWriteDuration := time.Since(tWrite)
+		printSummary(len(finalPackets), *outputFile, *outputLength, tProcess, tWriteDuration, time.Since(t0))
 		}
 	}
 }
@@ -261,6 +279,8 @@ func processDatasetStreaming(datasetDir, outputFile, outputFormat string, output
 
 	if outputFormat == "parquet" {
 		writer, err = NewParquetStreamWriter(outputFile, bufferSize, hasClass)
+	} else if outputFormat == "numpy" {
+		writer, err = NewNumpyStreamWriter(outputFile, bufferSize, hasClass)
 	} else {
 		writer, err = NewCSVStreamWriter(outputFile, bufferSize, hasClass)
 	}
@@ -342,6 +362,8 @@ func processSingleFileStreaming(inputFile, outputFile, outputFormat string, outp
 
 	if outputFormat == "parquet" {
 		writer, err = NewParquetStreamWriter(outputFile, bufferSize, false)
+	} else if outputFormat == "numpy" {
+		writer, err = NewNumpyStreamWriter(outputFile, bufferSize, false)
 	} else {
 		writer, err = NewCSVStreamWriter(outputFile, bufferSize, false)
 	}

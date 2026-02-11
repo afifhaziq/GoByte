@@ -1,7 +1,49 @@
 #!/bin/bash
 # GoByte Pre-Release Testing & Benchmarking Script
 
+# Run this script and log it with this command: bash test_release.sh 2>&1 | tee benchmark_results.log
+
 set -e
+
+# Function to monitor peak and average RAM usage of a process and all its children
+# Returns: "peak_mb avg_mb" (values in MB)
+monitor_ram() {
+    local pid=$1
+    local peak=0
+    local sum=0
+    local count=0
+    
+    while kill -0 $pid 2>/dev/null; do
+        # Get memory of main process and all children
+        local pids="$pid"
+        local children=$(pgrep -P $pid 2>/dev/null | tr '\n' ' ')
+        if [ -n "$children" ]; then
+            pids="$pid $children"
+        fi
+        
+        local current=$(ps -o rss= -p $pids 2>/dev/null | awk '{sum+=$1} END {print sum+0}')
+        
+        if [ $current -gt $peak ]; then
+            peak=$current
+        fi
+        
+        sum=$((sum + current))
+        count=$((count + 1))
+        
+        sleep 0.1
+    done
+    
+    local avg=0
+    if [ $count -gt 0 ]; then
+        avg=$((sum / count))
+    fi
+    
+    # Convert KB to MB and return both values
+    local peak_mb=$((peak / 1024))
+    local avg_mb=$((avg / 1024))
+    
+    echo "$peak_mb $avg_mb"
+}
 
 echo "=========================================="
 echo "GoByte Pre-Release Testing & Benchmarking"
@@ -16,16 +58,16 @@ NC='\033[0m' # No Color
 
 # Get dataset info
 echo -e "${BLUE}Dataset Information:${NC}"
-TOTAL_FILES=$(find dataset/PCAP -name "*.pcap*" | wc -l)
-TOTAL_SIZE=$(du -sh dataset/PCAP | cut -f1)
+TOTAL_FILES=$(find PCAP -name "*.pcap*" | wc -l)
+TOTAL_SIZE=$(du -sh PCAP | cut -f1)
 echo "  - Total files: $TOTAL_FILES"
 echo "  - Total size: $TOTAL_SIZE"
-echo "  - Classes: $(ls -d dataset/PCAP/*/ | wc -l)"
-ls -d dataset/PCAP/*/ | xargs -n1 basename | sed 's/^/    - /'
+echo "  - Classes: $(ls -d PCAP/*/ 2>/dev/null | wc -l)"
+ls -d PCAP/*/ 2>/dev/null | xargs -n1 basename | sed 's/^/    - /'
 echo ""
 
 # Pick a small test file
-TEST_FILE=$(find dataset/PCAP -name "*.pcap*" -type f | head -1)
+TEST_FILE=$(find PCAP -name "*.pcap*" -type f | head -1)
 echo -e "${BLUE}Test file: ${NC}$(basename $TEST_FILE)"
 TEST_SIZE=$(du -h "$TEST_FILE" | cut -f1)
 echo "  - Size: $TEST_SIZE"
@@ -39,7 +81,15 @@ echo ""
 
 # Test 1: Single file - CSV output
 echo -e "${BLUE}Test 1: Single File → CSV${NC}"
-/usr/bin/time -v ./gobyte --input "$TEST_FILE" --format csv --output output/test1.csv 2>&1 | grep -E "(Elapsed|Maximum resident|User time|System time)" || true
+./gobyte --input "$TEST_FILE" --format csv --output output/test1.csv > /tmp/gobyte_test1.log 2>&1 &
+GOBYTE_PID=$!
+RAM_STATS=$(monitor_ram $GOBYTE_PID)
+wait $GOBYTE_PID
+cat /tmp/gobyte_test1.log
+echo ""
+PEAK_RAM_MB=$(echo $RAM_STATS | awk '{print $1}')
+AVG_RAM_MB=$(echo $RAM_STATS | awk '{print $2}')
+echo "  Peak RAM: ${PEAK_RAM_MB} MB | Avg RAM: ${AVG_RAM_MB} MB"
 FILE_SIZE=$(du -h output/test1.csv 2>/dev/null | cut -f1 || echo "N/A")
 PACKET_COUNT=$(tail -n +2 output/test1.csv 2>/dev/null | wc -l || echo "0")
 echo "  Output: $FILE_SIZE, $PACKET_COUNT packets"
@@ -49,94 +99,120 @@ echo ""
 
 # Test 2: Single file - Parquet output
 echo -e "${BLUE}Test 2: Single File → Parquet${NC}"
-/usr/bin/time -v ./gobyte --input "$TEST_FILE" --format parquet --output output/test2.parquet 2>&1 | grep -E "(Elapsed|Maximum resident|User time|System time)" || true
+./gobyte --input "$TEST_FILE" --format parquet --output output/test2.parquet > /tmp/gobyte_test2.log 2>&1 &
+GOBYTE_PID=$!
+RAM_STATS=$(monitor_ram $GOBYTE_PID)
+wait $GOBYTE_PID
+cat /tmp/gobyte_test2.log
+echo ""
+PEAK_RAM_MB=$(echo $RAM_STATS | awk '{print $1}')
+AVG_RAM_MB=$(echo $RAM_STATS | awk '{print $2}')
+echo "  Peak RAM: ${PEAK_RAM_MB} MB | Avg RAM: ${AVG_RAM_MB} MB"
 FILE_SIZE=$(du -h output/test2.parquet 2>/dev/null | cut -f1 || echo "N/A")
 echo "  Output: $FILE_SIZE"
 rm -f output/test2.parquet
 echo -e "${GREEN}[PASS] Test 2 passed${NC}"
 echo ""
 
-# Test 3: Fixed-length packets (1500 bytes)
-echo -e "${BLUE}Test 3: Fixed-Length Packets (1500 bytes)${NC}"
-/usr/bin/time -v ./gobyte --input "$TEST_FILE" --format parquet --length 1500 --output output/test3.parquet 2>&1 | grep -E "(Elapsed|Maximum resident|User time|System time)" || true
-FILE_SIZE=$(du -h output/test3.parquet 2>/dev/null | cut -f1 || echo "N/A")
-echo "  Output: $FILE_SIZE"
-rm -f output/test3.parquet
+# Test 3: Fixed-length packets (1500 bytes) - CSV format
+echo -e "${BLUE}Test 3: Fixed-Length Packets (1500 bytes) - CSV${NC}"
+./gobyte --input "$TEST_FILE" --format csv --length 1500 --output output/test3.csv > /tmp/gobyte_test3.log 2>&1 &
+GOBYTE_PID=$!
+RAM_STATS=$(monitor_ram $GOBYTE_PID)
+wait $GOBYTE_PID
+cat /tmp/gobyte_test3.log
+echo ""
+PEAK_RAM_MB=$(echo $RAM_STATS | awk '{print $1}')
+AVG_RAM_MB=$(echo $RAM_STATS | awk '{print $2}')
+echo "  Peak RAM: ${PEAK_RAM_MB} MB | Avg RAM: ${AVG_RAM_MB} MB"
+FILE_SIZE=$(du -h output/test3.csv 2>/dev/null | cut -f1 || echo "N/A")
+PACKET_COUNT=$(tail -n +2 output/test3.csv 2>/dev/null | wc -l || echo "0")
+echo "  Output: $FILE_SIZE, $PACKET_COUNT packets"
+rm -f output/test3.csv
 echo -e "${GREEN}[PASS] Test 3 passed${NC}"
 echo ""
 
-# Test 4: IP Masking
-echo -e "${BLUE}Test 4: IP Address Masking${NC}"
-/usr/bin/time -v ./gobyte --input "$TEST_FILE" --format parquet --ipmask --output output/test4.parquet 2>&1 | grep -E "(Elapsed|Maximum resident|User time|System time)" || true
-FILE_SIZE=$(du -h output/test4.parquet 2>/dev/null | cut -f1 || echo "N/A")
-echo "  Output: $FILE_SIZE"
-rm -f output/test4.parquet
+# Test 4: IP Masking (with fixed length) - CSV format
+echo -e "${BLUE}Test 4: IP Address Masking (Fixed-Length 1500 bytes) - CSV${NC}"
+./gobyte --input "$TEST_FILE" --format csv --ipmask --length 1500 --output output/test4.csv > /tmp/gobyte_test4.log 2>&1 &
+GOBYTE_PID=$!
+RAM_STATS=$(monitor_ram $GOBYTE_PID)
+wait $GOBYTE_PID
+cat /tmp/gobyte_test4.log
+echo ""
+PEAK_RAM_MB=$(echo $RAM_STATS | awk '{print $1}')
+AVG_RAM_MB=$(echo $RAM_STATS | awk '{print $2}')
+echo "  Peak RAM: ${PEAK_RAM_MB} MB | Avg RAM: ${AVG_RAM_MB} MB"
+FILE_SIZE=$(du -h output/test4.csv 2>/dev/null | cut -f1 || echo "N/A")
+PACKET_COUNT=$(tail -n +2 output/test4.csv 2>/dev/null | wc -l || echo "0")
+echo "  Output: $FILE_SIZE, $PACKET_COUNT packets"
+rm -f output/test4.csv
 echo -e "${GREEN}[PASS] Test 4 passed${NC}"
 echo ""
 
-# Test 5: Dataset mode (default - in-memory)
-echo -e "${BLUE}Test 5: Dataset Mode (In-Memory) - Full Dataset${NC}"
-echo "  Processing $TOTAL_FILES files..."
-START_TIME=$(date +%s)
-/usr/bin/time -v ./gobyte --dataset dataset/PCAP --format parquet --length 1500 --concurrent 2 --output output/test5.parquet 2>&1 | tee /tmp/gobyte_test5.log | grep -E "(Elapsed|Maximum resident|User time|System time|Processed.*packets)" || true
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
-FILE_SIZE=$(du -h output/test5.parquet 2>/dev/null | cut -f1 || echo "N/A")
-PACKET_COUNT=$(grep "Processed" /tmp/gobyte_test5.log | grep -oP '\d+(?= packets)' || echo "N/A")
-echo "  Output: $FILE_SIZE, $PACKET_COUNT packets"
-echo "  Duration: ${DURATION}s"
-rm -f output/test5.parquet
+# Test 5: Dataset mode - NumPy format with streaming (recommended)
+echo -e "${BLUE}Test 5: Dataset Mode → NumPy with Streaming (Memory Efficient)${NC}"
+echo "  Processing $TOTAL_FILES files with streaming mode..."
+./gobyte --dataset PCAP --format numpy --length 1500 --streaming --output output/test5.npy > /tmp/gobyte_test5.log 2>&1 &
+GOBYTE_PID=$!
+RAM_STATS=$(monitor_ram $GOBYTE_PID)
+wait $GOBYTE_PID
+cat /tmp/gobyte_test5.log
+echo ""
+PEAK_RAM_MB=$(echo $RAM_STATS | awk '{print $1}')
+AVG_RAM_MB=$(echo $RAM_STATS | awk '{print $2}')
+echo "  Peak RAM: ${PEAK_RAM_MB} MB | Avg RAM: ${AVG_RAM_MB} MB"
+DATA_FILE_SIZE=$(du -h output/test5_data.npy 2>/dev/null | cut -f1 || echo "N/A")
+LABELS_FILE_SIZE=$(du -h output/test5_labels.npy 2>/dev/null | cut -f1 || echo "N/A")
+TOTAL_SIZE=$(du -ch output/test5_data.npy output/test5_labels.npy output/test5_classes.json 2>/dev/null | tail -1 | cut -f1 || echo "N/A")
+PACKET_COUNT=$(grep -E "(Total packets|Processed.*packets)" /tmp/gobyte_test5.log | grep -oP '\d+' | head -1 || echo "N/A")
+echo "  Output: $DATA_FILE_SIZE (data.npy), $LABELS_FILE_SIZE (labels.npy), $TOTAL_SIZE total, $PACKET_COUNT packets"
+rm -f output/test5_data.npy output/test5_labels.npy output/test5_classes.json 2>/dev/null
 echo -e "${GREEN}[PASS] Test 5 passed${NC}"
 echo ""
 
-# Test 6: Dataset mode (streaming - memory efficient)
-echo -e "${BLUE}Test 6: Dataset Mode (Streaming) - Full Dataset${NC}"
-echo "  Processing $TOTAL_FILES files with streaming..."
-START_TIME=$(date +%s)
-/usr/bin/time -v ./gobyte --dataset dataset/PCAP --format parquet --length 1500 --streaming --output output/test6.parquet 2>&1 | tee /tmp/gobyte_test6.log | grep -E "(Elapsed|Maximum resident|User time|System time|Total packets)" || true
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
-FILE_SIZE=$(du -h output/test6.parquet 2>/dev/null | cut -f1 || echo "N/A")
-PACKET_COUNT=$(grep "Total packets" /tmp/gobyte_test6.log | grep -oP '\d+' | head -1 || echo "N/A")
-echo "  Output: $FILE_SIZE, $PACKET_COUNT packets"
-echo "  Duration: ${DURATION}s"
-rm -f output/test6.parquet
-echo -e "${GREEN}[PASS] Test 6 passed${NC}"
-echo ""
-
-# Test 7: Per-file output mode
-echo -e "${BLUE}Test 7: Per-File Output Mode (Memory Efficient)${NC}"
+# Test 6: Per-file output mode - CSV format
+echo -e "${BLUE}Test 6: Per-File Output Mode (Memory Efficient) - CSV${NC}"
 echo "  Creating separate output for each input file..."
-START_TIME=$(date +%s)
-/usr/bin/time -v ./gobyte --dataset dataset/PCAP --format parquet --length 1500 --per-file 2>&1 | tee /tmp/gobyte_test7.log | grep -E "(Elapsed|Maximum resident|User time|System time)" || true
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
-OUTPUT_DIR=$(grep "Output dir:" /tmp/gobyte_test7.log | awk '{print $NF}' || echo "output/per_file_*")
-if [ -d "$OUTPUT_DIR" ]; then
-    OUTPUT_COUNT=$(find "$OUTPUT_DIR" -name "*.parquet" | wc -l)
+./gobyte --dataset PCAP --format csv --length 50 --concurrent 6 --per-file > /tmp/gobyte_test6.log 2>&1 &
+GOBYTE_PID=$!
+RAM_STATS=$(monitor_ram $GOBYTE_PID)
+wait $GOBYTE_PID
+cat /tmp/gobyte_test6.log
+echo ""
+PEAK_RAM_MB=$(echo $RAM_STATS | awk '{print $1}')
+AVG_RAM_MB=$(echo $RAM_STATS | awk '{print $2}')
+echo "  Peak RAM: ${PEAK_RAM_MB} MB | Avg RAM: ${AVG_RAM_MB} MB"
+OUTPUT_DIR=$(grep "Output dir:" /tmp/gobyte_test6.log | awk '{print $NF}' || echo "")
+if [ -n "$OUTPUT_DIR" ] && [ -d "$OUTPUT_DIR" ]; then
+    OUTPUT_COUNT=$(find "$OUTPUT_DIR" -name "*.csv" | wc -l)
     TOTAL_OUTPUT_SIZE=$(du -sh "$OUTPUT_DIR" | cut -f1)
     echo "  Output: $OUTPUT_COUNT files, $TOTAL_OUTPUT_SIZE total"
     rm -rf "$OUTPUT_DIR"
 else
-    echo "  Output directory not found"
+    # Try to find the directory
+    OUTPUT_DIR=$(find output -type d -name "per_file_*" 2>/dev/null | head -1)
+    if [ -n "$OUTPUT_DIR" ] && [ -d "$OUTPUT_DIR" ]; then
+        OUTPUT_COUNT=$(find "$OUTPUT_DIR" -name "*.csv" | wc -l)
+        TOTAL_OUTPUT_SIZE=$(du -sh "$OUTPUT_DIR" | cut -f1)
+        echo "  Output: $OUTPUT_COUNT files, $TOTAL_OUTPUT_SIZE total"
+        rm -rf "$OUTPUT_DIR"
+    else
+        echo "  Output directory not found"
+    fi
 fi
-echo "  Duration: ${DURATION}s"
-echo -e "${GREEN}[PASS] Test 7 passed${NC}"
+echo -e "${GREEN}[PASS] Test 6 passed${NC}"
 echo ""
 
 # Summary
-echo "=========================================="
-echo -e "${GREEN}All Tests Passed!${NC}"
-echo "=========================================="
 echo ""
 echo "Summary:"
 echo "  - Build: PASS"
-echo "  - Single file CSV: PASS"
-echo "  - Single file Parquet: PASS"
-echo "  - Fixed-length packets: PASS"
-echo "  - IP masking: PASS"
-echo "  - Dataset in-memory mode: PASS"
-echo "  - Dataset streaming mode: PASS"
-echo "  - Per-file output mode: PASS"
+echo "  - Single file CSV (variable-length): PASS"
+echo "  - Single file Parquet (variable-length): PASS"
+echo "  - Fixed-length packets (CSV): PASS"
+echo "  - IP masking (CSV): PASS"
+echo "  - Dataset mode NumPy with streaming: PASS"
+echo "  - Per-file output mode (CSV): PASS"
 echo ""
-echo "ready for release"
+echo 

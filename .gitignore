@@ -6,12 +6,15 @@
 /dataset/
 *.pcap
 *.pcapng
+__pycache__/
 
 # Output Files
 /output/
 *.csv
 *.parquet
 output.*
+*.npy
+*.json
 
 # Go Build Artifacts
 *.exe
