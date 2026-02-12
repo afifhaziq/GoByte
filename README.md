@@ -3,7 +3,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Release](https://github.com/afifhaziq/GoByte/actions/workflows/release.yml/badge.svg)](https://github.com/afifhaziq/GoByte/actions/workflows/release.yml)
-[![Security Scan](https://img.shields.io/github/actions/workflow/status/afifhaziq/GoByte/security.yml?branch=main&label=security)](https://github.com/afifhaziq/GoByte/actions/workflows/security.yml)
+[![Security Scan](https://github.com/afifhaziq/GoByte/actions/workflows/security.yml/badge.svg)](https://github.com/afifhaziq/GoByte/actions/workflows/security.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/afifhaziq/GoByte?style=flat)](https://github.com/afifhaziq/GoByte/releases/latest)
 
 
