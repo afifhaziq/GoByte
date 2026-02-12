@@ -32,7 +32,15 @@ jobs:
         run: |
           go build -ldflags="-s -w" -o gobyte-linux-amd64 .
 
+      - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gobyte-linux-amd64
+          path: ./gobyte-linux-amd64
+
       - name: Upload Release Asset
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -65,7 +73,15 @@ jobs:
         run: |
           go build -ldflags="-s -w" -o gobyte-linux-arm64 .
 
+      - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gobyte-linux-arm64
+          path: ./gobyte-linux-arm64
+
       - name: Upload Release Asset
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -95,7 +111,15 @@ jobs:
         run: |
           go build -ldflags="-s -w" -o gobyte-windows-amd64.exe .
 
+      - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gobyte-windows-amd64
+          path: ./gobyte-windows-amd64.exe
+
       - name: Upload Release Asset
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -128,7 +152,15 @@ jobs:
         run: |
           go build -ldflags="-s -w" -o gobyte-darwin-arm64 .
 
+      - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gobyte-darwin-arm64
+          path: ./gobyte-darwin-arm64
+
       - name: Upload Release Asset
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -161,7 +193,15 @@ jobs:
         run: |
           go build -ldflags="-s -w" -o gobyte-darwin-amd64 .
 
+      - name: Upload workflow artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gobyte-darwin-amd64
+          path: ./gobyte-darwin-amd64
+
       - name: Upload Release Asset
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
