@@ -140,7 +140,7 @@ jobs:
 
   build-macos-amd64:
     name: Build macOS AMD64 (Intel)
-    runs-on: macos-13  # macos-13 still uses Intel runners
+    runs-on: macos-15-intel  
 
     steps:
       - name: Checkout code
