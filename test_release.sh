@@ -56,18 +56,21 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Configurable dataset path (can be overridden: DATASET_DIR=... ./test_release.sh)
+DATASET_DIR="${DATASET_DIR:-dataset/test}"
+
 # Get dataset info
 echo -e "${BLUE}Dataset Information:${NC}"
-TOTAL_FILES=$(find PCAP -name "*.pcap*" | wc -l)
-TOTAL_SIZE=$(du -sh PCAP | cut -f1)
+TOTAL_FILES=$(find "$DATASET_DIR" -name "*.pcap*" | wc -l)
+TOTAL_SIZE=$(du -sh "$DATASET_DIR" | cut -f1)
 echo "  - Total files: $TOTAL_FILES"
 echo "  - Total size: $TOTAL_SIZE"
-echo "  - Classes: $(ls -d PCAP/*/ 2>/dev/null | wc -l)"
-ls -d PCAP/*/ 2>/dev/null | xargs -n1 basename | sed 's/^/    - /'
+echo "  - Classes: $(ls -d "$DATASET_DIR"/*/ 2>/dev/null | wc -l)"
+ls -d "$DATASET_DIR"/*/ 2>/dev/null | xargs -n1 basename | sed 's/^/    - /'
 echo ""
 
 # Pick a small test file
-TEST_FILE=$(find PCAP -name "*.pcap*" -type f | head -1)
+TEST_FILE=$(find "$DATASET_DIR" -name "*.pcap*" -type f | head -1)
 echo -e "${BLUE}Test file: ${NC}$(basename $TEST_FILE)"
 TEST_SIZE=$(du -h "$TEST_FILE" | cut -f1)
 echo "  - Size: $TEST_SIZE"
@@ -153,7 +156,7 @@ echo ""
 # Test 5: Dataset mode - NumPy format with streaming (recommended)
 echo -e "${BLUE}Test 5: Dataset Mode → NumPy with Streaming (Memory Efficient)${NC}"
 echo "  Processing $TOTAL_FILES files with streaming mode..."
-./gobyte --dataset PCAP --format numpy --length 1500 --streaming --output output/test5.npy > /tmp/gobyte_test5.log 2>&1 &
+./gobyte --dataset "$DATASET_DIR" --format numpy --length 1500 --streaming --output output/test5.npy > /tmp/gobyte_test5.log 2>&1 &
 GOBYTE_PID=$!
 RAM_STATS=$(monitor_ram $GOBYTE_PID)
 wait $GOBYTE_PID
@@ -174,7 +177,7 @@ echo ""
 # Test 6: Per-file output mode - CSV format
 echo -e "${BLUE}Test 6: Per-File Output Mode (Memory Efficient) - CSV${NC}"
 echo "  Creating separate output for each input file..."
-./gobyte --dataset PCAP --format csv --length 50 --concurrent 6 --per-file > /tmp/gobyte_test6.log 2>&1 &
+./gobyte --dataset "$DATASET_DIR" --format csv --length 50 --concurrent 6 --per-file > /tmp/gobyte_test6.log 2>&1 &
 GOBYTE_PID=$!
 RAM_STATS=$(monitor_ram $GOBYTE_PID)
 wait $GOBYTE_PID

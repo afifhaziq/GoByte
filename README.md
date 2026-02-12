@@ -2,7 +2,7 @@
 
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/afifhaziq/GoByte/release.yml?branch=main&label=build)](https://github.com/afifhaziq/GoByte/actions/workflows/release.yml)
+[![Release](https://github.com/afifhaziq/GoByte/actions/workflows/release.yml/badge.svg)](https://github.com/afifhaziq/GoByte/actions/workflows/release.yml)
 [![Security Scan](https://img.shields.io/github/actions/workflow/status/afifhaziq/GoByte/security.yml?branch=main&label=security)](https://github.com/afifhaziq/GoByte/actions/workflows/security.yml)
 [![GitHub Release](https://img.shields.io/github/v/release/afifhaziq/GoByte?style=flat)](https://github.com/afifhaziq/GoByte/releases/latest)
 
@@ -368,7 +368,7 @@ Note: These results are based on the end to end time of preprocessing + exportin
 - Processed **12.5 million packets** in just **16 seconds**
 - Used only **55 MB peak RAM** (lightweight and memory-efficient)
 - Generated **18 GB NumPy output** (vs ~50-70 GB for CSV)
-- Maintained **~776K packets/second** throughput throughout
+- Maintained **~776K packets/second** throughput
 
 #### Single File Processing Performance
 
@@ -437,7 +437,7 @@ GoByte/
       |          ^~~~~~~~
 compilation terminated.
 ```
-Solution: Install the libpcap development headers. Follow the instructions in the [Installation](#installation) section.
+Solution: Install the libpcap development headers for your operating system. Follow the instructions in the [Installation](#installation) section.
 
 ---
 
