@@ -16,8 +16,6 @@ GoByte's NumPy export format provides significant advantages over CSV:
 
 ## Files
 
-### `utils.py`
-Shared utility functions for loading NumPy files and class mappings.
 
 ### `01_basic_loading.py`
 Basic example: Load and inspect NumPy files.
@@ -92,20 +90,3 @@ After running GoByte, you'll have:
 - **Data Type:** `uint8` (0-255)
 - **Shape:** Data is (N, 1500), Labels is (N,)
 - **Storage:** Raw binary (no string conversion)
-
-## Quick Start
-
-```python
-from utils import load_npy, load_class_mapping
-
-# Load data
-data = load_npy('../output/test_classes_data.npy')
-labels = load_npy('../output/test_classes_labels.npy')
-
-# Load class mapping
-id_to_name, name_to_id = load_class_mapping('../output/test_classes_classes.json')
-
-# Use the data
-print(f"Data shape: {data.shape}")
-print(f"Labels shape: {labels.shape}")
-```

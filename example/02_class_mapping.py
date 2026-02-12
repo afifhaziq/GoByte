@@ -7,14 +7,38 @@ integer labels to human-readable class names.
 """
 
 import numpy as np
-from utils import load_npy, load_class_mapping
+
+def load_class_mapping(classes_file):
+    """
+    Load class ID to name mapping from JSON file.
+    
+    Args:
+        classes_file: Path to classes.json file
+        
+    Returns:
+        tuple: (id_to_name dict, name_to_id dict)
+    """
+    import json
+    import os
+    
+    if not os.path.exists(classes_file):
+        return None, None
+    
+    with open(classes_file, 'r') as f:
+        class_map = json.load(f)
+    
+    id_to_name = {int(k): v for k, v in class_map.items()}
+    name_to_id = {v: int(k) for k, v in class_map.items()}
+    
+    return id_to_name, name_to_id
+
 
 # Load data
-data = load_npy('../output/test_classes_data.npy')
-labels = load_npy('../output/test_classes_labels.npy')
+data = np.load('../output/output_data.npy')
+labels = np.load('../output/output_labels.npy')
 
 # Load class mapping
-id_to_name, name_to_id = load_class_mapping('../output/test_classes_classes.json')
+id_to_name, name_to_id = load_class_mapping('../output/output_classes.json')
 
 if id_to_name is None:
     print("WARNING: No class mapping file found.")
@@ -40,8 +64,8 @@ sample_names = [id_to_name[int(l)] for l in sample_labels]
 print(f"First 10 labels as integers: {sample_labels}")
 print(f"First 10 labels as names:    {sample_names}")
 
-# Example: Get class ID from name
-print("\nExample: Get class ID from name")
-if 'Steam' in name_to_id:
-    steam_id = name_to_id['Steam']
-    print(f"'Steam' maps to class ID: {steam_id}")
+# # Example: Get class ID from name
+# print("\nExample: Get class ID from name")
+# if 'Steam' in name_to_id:
+#     steam_id = name_to_id['Steam']
+#     print(f"'Steam' maps to class ID: {steam_id}")

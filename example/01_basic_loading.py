@@ -6,12 +6,11 @@ This example shows how to load the data and labels files.
 """
 
 import numpy as np
-from utils import load_npy
 
 # Load data files
 print("Loading NumPy files...")
-data = load_npy('../output/test_classes_data.npy')
-labels = load_npy('../output/test_classes_labels.npy')
+data = np.load('../output/output_data.npy')
+labels = np.load('../output/output_labels.npy')
 
 # Show basic information
 print(f"\nSuccessfully loaded!")

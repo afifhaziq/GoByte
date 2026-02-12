@@ -111,7 +111,7 @@ func main() {
 			fmt.Println("   For large datasets, this can cause Out-Of-Memory (OOM) errors.")
 			fmt.Println("   Recommendation: Use --streaming (default) or --per-file for large datasets.")
 			fmt.Println()
-			
+
 			finalPackets := processDataset(*datasetDir, *outputLength, *sortPackets, *maxConcurrentFiles, *ipMask)
 			tProcess := time.Since(t0)
 			fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
@@ -138,27 +138,27 @@ func main() {
 		if *streamingMode {
 			processSingleFileStreaming(*inputFile, *outputFile, *outputFormat, *outputLength, *ipMask)
 		} else {
-		// Default mode (loads all in memory)
-		finalPackets := processSingleFile(*inputFile, *outputLength, *sortPackets, *ipMask)
-		tProcess := time.Since(t0)
-		fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
+			// Default mode (loads all in memory)
+			finalPackets := processSingleFile(*inputFile, *outputLength, *sortPackets, *ipMask)
+			tProcess := time.Since(t0)
+			fmt.Printf("\nProcessed %d packets in %v\n", len(finalPackets), tProcess)
 
-		tWrite := time.Now()
-		if *outputFormat == "parquet" {
-			if err := writeParquet(*outputFile, finalPackets, *outputLength); err != nil {
-				log.Fatalf("failed to write parquet: %v", err)
+			tWrite := time.Now()
+			if *outputFormat == "parquet" {
+				if err := writeParquet(*outputFile, finalPackets, *outputLength); err != nil {
+					log.Fatalf("failed to write parquet: %v", err)
+				}
+			} else if *outputFormat == "numpy" {
+				if err := writeNumpy(*outputFile, finalPackets, *outputLength); err != nil {
+					log.Fatalf("failed to write numpy: %v", err)
+				}
+			} else {
+				if err := writeCSVOptimized(*outputFile, finalPackets, *outputLength); err != nil {
+					log.Fatalf("failed to write csv: %v", err)
+				}
 			}
-		} else if *outputFormat == "numpy" {
-			if err := writeNumpy(*outputFile, finalPackets, *outputLength); err != nil {
-				log.Fatalf("failed to write numpy: %v", err)
-			}
-		} else {
-			if err := writeCSVOptimized(*outputFile, finalPackets, *outputLength); err != nil {
-				log.Fatalf("failed to write csv: %v", err)
-			}
-		}
-		tWriteDuration := time.Since(tWrite)
-		printSummary(len(finalPackets), *outputFile, *outputLength, tProcess, tWriteDuration, time.Since(t0))
+			tWriteDuration := time.Since(tWrite)
+			printSummary(len(finalPackets), *outputFile, *outputLength, tProcess, tWriteDuration, time.Since(t0))
 		}
 	}
 }
